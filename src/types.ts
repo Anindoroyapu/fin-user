@@ -1,3 +1,21 @@
+export interface EnrolledFinger {
+  fingerName: string; // e.g. "Right Index", "Right Thumb", "Left Index", etc.
+  templateData: string; // Base64 biometric template
+  BMPBase64?: string;
+  ErrorCode?: number;
+  ISOTemplateBase64?: string;
+  ImageDPI?: number;
+  ImageDataBase64?: string | null;
+  ImageHeight?: number;
+  ImageQuality?: number;
+  ImageWidth?: number;
+  Manufacturer?: string;
+  Model?: string;
+  NFIQ?: number;
+  SerialNumber?: string;
+  TemplateBase64?: string;
+}
+
 export interface User {
   id: string; // e.g. EMP-101, EMP-102
   name: string;
@@ -9,6 +27,7 @@ export interface User {
   status: 'Present' | 'Late' | 'Absent' | 'Inactive';
   avatar?: string;
   joinedDate: string;
+  fingers?: EnrolledFinger[]; // Multiple registered fingers
 }
 
 export interface AttendanceRecord {

@@ -31,6 +31,8 @@ let enrollUser: User | null = null;
 let enrollStep = 0;
 const enrollMaxSteps = 3;
 let enrollScanBuffer: string[] = [];
+let lastCapturedData: any = null;
+let enrollIsScanningActive = false;
 
 // Helper to generate formatted time (HH:MM:SS AM/PM)
 function getFormattedTime(): string {
@@ -432,8 +434,10 @@ function startPolling() {
         if (localUserIndex > -1) {
           const localUser = users[localUserIndex];
 
-          // If database status or fingerprint changed
-          if (localUser.status !== dbUser.status || localUser.fingerprintId !== dbUser.fingerprintId) {
+          const fingersLengthChanged = (localUser.fingers?.length || 0) !== (dbUser.fingers?.length || 0);
+
+          // If database status, fingerprintId, or fingers array changed
+          if (localUser.status !== dbUser.status || localUser.fingerprintId !== dbUser.fingerprintId || fingersLengthChanged) {
             hasChanges = true;
 
             // Trigger punch attendance record if transitioned to Present/Late
@@ -461,7 +465,8 @@ function startPolling() {
             users[localUserIndex] = {
               ...localUser,
               status: dbUser.status,
-              fingerprintId: dbUser.fingerprintId
+              fingerprintId: dbUser.fingerprintId,
+              fingers: dbUser.fingers || []
             };
           }
         }
@@ -480,12 +485,13 @@ function startPolling() {
 }
 
 // ATTENDANCE RECORDING HANDLERS
-function recordPunch(userId: string): { status: string; isClockOut: boolean } | null {
+function recordPunch(userId: string, fingerName?: string): { status: string; isClockOut: boolean } | null {
   const matchedUser = users.find(u => u.id === userId);
   if (!matchedUser) return null;
 
   const todayStr = new Date().toISOString().split('T')[0];
   const existingRecordIndex = attendance.findIndex(r => r.userId === userId && r.date === todayStr);
+  const fingerLabel = fingerName ? ` via ${fingerName}` : '';
 
   if (existingRecordIndex > -1) {
     const record = attendance[existingRecordIndex];
@@ -496,7 +502,7 @@ function recordPunch(userId: string): { status: string; isClockOut: boolean } | 
         checkOut: getFormattedTime()
       };
       saveToLocalStorage('bio_attendance', attendance);
-      addLiveLog('scan_success', `Clock-Out Verified: ${matchedUser.name} punched out.`, matchedUser.id);
+      addLiveLog('scan_success', `Clock-Out Verified: ${matchedUser.name} punched out${fingerLabel}.`, matchedUser.id);
       renderDashboard();
       initFingerprint(userId, 'biometric_punch', 'Clock Out');
       return { status: record.status, isClockOut: true };
@@ -530,7 +536,7 @@ function recordPunch(userId: string): { status: string; isClockOut: boolean } | 
   // Update employee status back to server MySQL database
   updateUserStatusOnServer(userId, status);
 
-  addLiveLog('scan_success', `Punch Registered: ${matchedUser.name} identified as ${status}.`, matchedUser.id);
+  addLiveLog('scan_success', `Punch Registered: ${matchedUser.name} identified${fingerLabel} as ${status}.`, matchedUser.id);
   renderDashboard();
   initFingerprint(userId, 'biometric_punch', status);
   return { status, isClockOut: false };
@@ -691,9 +697,9 @@ function renderUsers() {
 
     let matchesBio = true;
     if (userBioFilter === 'Enrolled') {
-      matchesBio = !!user.fingerprintId;
+      matchesBio = (user.fingers && user.fingers.length > 0) || !!user.fingerprintId;
     } else if (userBioFilter === 'NotEnrolled') {
-      matchesBio = !user.fingerprintId;
+      matchesBio = (!user.fingers || user.fingers.length === 0) && !user.fingerprintId;
     } else if (userBioFilter === 'Present') {
       matchesBio = presentToday;
     }
@@ -710,7 +716,7 @@ function renderUsers() {
 
   filtered.forEach(user => {
     const card = document.createElement('div');
-    card.className = "bg-slate-950/40 p-5 rounded-2xl border border-slate-900 hover:border-slate-800 transition-all hover:shadow-xl relative flex flex-col justify-between h-[300px]";
+    card.className = "bg-slate-950/40 p-5 rounded-2xl border border-slate-900 hover:border-slate-800 transition-all hover:shadow-xl relative flex flex-col justify-between min-h-[310px]";
 
     const todayStr = new Date().toISOString().split('T')[0];
     const loggedToday = attendance.find(r => r.userId === user.id && r.date === todayStr);
@@ -722,10 +728,11 @@ function renderUsers() {
       statusBadge = `<span class="px-2 py-0.5 rounded-full text-[9px] font-extrabold uppercase font-mono bg-slate-900/60 text-slate-400 border border-slate-800">Absent</span>`;
     }
 
-    const bioBadge = user.fingerprintId 
+    const numFingers = (user.fingers?.length || (user.fingerprintId ? 1 : 0));
+    const bioBadge = numFingers > 0 
       ? `<span class="text-[9px] font-bold text-cyan-400 bg-cyan-950/60 border border-cyan-800/60 px-2 py-0.5 rounded-full flex items-center space-x-1">
           <i data-lucide="fingerprint" class="h-3 w-3"></i>
-          <span>ENROLLED</span>
+          <span>${numFingers} FINGER${numFingers > 1 ? 'S' : ''}</span>
          </span>`
       : `<span class="text-[9px] font-bold text-rose-400 bg-rose-950/60 border border-rose-800/60 px-2 py-0.5 rounded-full flex items-center space-x-1 animate-pulse">
           <i data-lucide="alert-triangle" class="h-3 w-3"></i>
@@ -762,6 +769,17 @@ function renderUsers() {
             <i data-lucide="phone" class="h-3.5 w-3.5 text-slate-500"></i>
             <span>${user.phone}</span>
           </div>
+          ${user.fingers && user.fingers.length > 0 ? `
+            <div class="flex flex-wrap gap-1 pt-1.5 items-center">
+              <span class="text-[9px] text-slate-500 font-sans font-bold uppercase tracking-wider mr-1">Registered:</span>
+              ${user.fingers.map(f => `<span class="bg-slate-900 text-slate-400 border border-slate-850 text-[9px] px-1.5 py-0.5 rounded-lg font-sans">${f.fingerName}</span>`).join('')}
+            </div>
+          ` : (user.fingerprintId ? `
+            <div class="flex flex-wrap gap-1 pt-1.5 items-center">
+              <span class="text-[9px] text-slate-500 font-sans font-bold uppercase tracking-wider mr-1">Registered:</span>
+              <span class="bg-slate-900 text-slate-400 border border-slate-850 text-[9px] px-1.5 py-0.5 rounded-lg font-sans text-xs">Right Index (Legacy)</span>
+            </div>
+          ` : '')}
         </div>
       </div>
 
@@ -769,7 +787,7 @@ function renderUsers() {
       <div class="pt-4 border-t border-slate-900/60 flex items-center justify-between gap-2 mt-4">
         <button onclick="window.enrollFingerprint('${user.id}')" class="flex-1 flex items-center justify-center space-x-1.5 py-1.5 bg-slate-900 hover:bg-slate-850 border border-slate-800 text-slate-200 hover:text-white rounded-xl text-xs font-bold transition-all cursor-pointer active:scale-95">
           <i data-lucide="fingerprint" class="h-3.5 w-3.5 text-cyan-400"></i>
-          <span>${user.fingerprintId ? 'Re-Enroll' : 'Enroll Finger'}</span>
+          <span>${numFingers > 0 ? 'Manage Fingers' : 'Enroll Finger'}</span>
         </button>
         
         <button onclick="window.editEmployee('${user.id}')" class="p-2 bg-slate-900 hover:bg-slate-850 border border-slate-800 text-slate-400 hover:text-slate-200 rounded-xl transition-all cursor-pointer" title="Edit Profile">
@@ -848,17 +866,34 @@ function populateSimulatorDropdown() {
   if (!dropdown) return;
 
   dropdown.innerHTML = '';
-  const enrolledUsers = users.filter(u => !!u.fingerprintId);
 
-  if (enrolledUsers.length === 0) {
+  const options: { value: string; label: string }[] = [];
+
+  users.forEach(user => {
+    if (user.fingers && user.fingers.length > 0) {
+      user.fingers.forEach(f => {
+        options.push({
+          value: `${user.id}:${f.fingerName}`,
+          label: `${user.name} (${user.id}) - ${f.fingerName}`
+        });
+      });
+    } else if (user.fingerprintId) {
+      options.push({
+        value: `${user.id}:Right Index`,
+        label: `${user.name} (${user.id}) - Right Index (Legacy)`
+      });
+    }
+  });
+
+  if (options.length === 0) {
     dropdown.innerHTML = `<option value="">-- No Enrolled Fingerprints Available --</option>`;
     return;
   }
 
-  enrolledUsers.forEach(user => {
+  options.forEach(optData => {
     const opt = document.createElement('option');
-    opt.value = user.id;
-    opt.textContent = `${user.name} (${user.id} - ${user.fingerprintId})`;
+    opt.value = optData.value;
+    opt.textContent = optData.label;
     dropdown.appendChild(opt);
   });
 }
@@ -926,6 +961,95 @@ function closeRegisterModal() {
 }
 
 // BIOMETRIC ENROLLMENT WORKFLOW HANDLERS
+function renderEnrolledFingers(user: User) {
+  const container = document.getElementById('enrolled-fingers-list');
+  if (!container) return;
+
+  container.innerHTML = '';
+  
+  const fingers = user.fingers || [];
+  if (fingers.length === 0) {
+    container.innerHTML = `<span class="text-xs text-slate-500 italic">কোনো আঙ্গুল নিবন্ধিত নেই (No fingers enrolled)</span>`;
+    return;
+  }
+
+  fingers.forEach(f => {
+    const badge = document.createElement('div');
+    badge.className = "inline-flex items-center space-x-1 px-2 py-0.5 bg-cyan-950/40 text-cyan-400 border border-cyan-800/40 rounded-lg text-[10px] font-sans font-medium";
+    badge.innerHTML = `
+      <span>${f.fingerName}</span>
+      <button class="delete-finger-btn hover:text-rose-400 transition-colors p-0.5 cursor-pointer" data-finger="${f.fingerName}" title="ডিলিট করুন">
+        <i data-lucide="x-circle" class="h-3 w-3"></i>
+      </button>
+    `;
+    container.appendChild(badge);
+  });
+
+  // Attach delete event listeners
+  container.querySelectorAll('.delete-finger-btn').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const fingerName = (e.currentTarget as HTMLElement).dataset.finger;
+      if (!fingerName) return;
+
+      if (confirm(`আপনি কি '${fingerName}' ফিঙ্গারপ্রিন্টটি মুছে ফেলতে চান?`)) {
+        try {
+          const res = await fetch(`/api/users/${user.id}/fingers/${encodeURIComponent(fingerName)}`, {
+            method: 'DELETE'
+          });
+          if (res.ok) {
+            // Update local state
+            user.fingers = (user.fingers || []).filter(item => item.fingerName !== fingerName);
+            if (user.fingerprintId && (user.fingers.length === 0 || !user.fingers.some(item => item.templateData === user.fingerprintId))) {
+              user.fingerprintId = user.fingers.length > 0 ? user.fingers[0].templateData : null;
+            }
+            addLiveLog('scan_failed', `Biometric Terminated: Deleted '${fingerName}' fingerprint for ${user.name}.`, user.id);
+            renderEnrolledFingers(user);
+            renderUsers();
+            populateSimulatorDropdown();
+          } else {
+            alert("Failed to delete fingerprint template from server.");
+          }
+        } catch (err) {
+          console.error("Error deleting finger:", err);
+        }
+      }
+    });
+  });
+
+  lucide.createIcons();
+}
+
+async function runEnrollmentAutoScanLoop() {
+  if (enrollIsScanningActive) return;
+  enrollIsScanningActive = true;
+
+  try {
+    while (enrollUser && enrollStep < enrollMaxSteps) {
+      // Check if the modal is currently open and not hidden
+      const modal = document.getElementById('enroll-modal');
+      if (!modal || modal.classList.contains('hidden')) {
+        break;
+      }
+
+      console.log(`Auto scan starting for step ${enrollStep + 1}`);
+      const success = await triggerEnrollScan();
+
+      // If user closed the modal during execution, break out
+      if (!enrollUser) break;
+
+      // Wait a short moment to allow the user to lift and place their finger again (if successful)
+      // or a slight delay to avoid hammer-querying if the local API has an error
+      const delayMs = success ? 2200 : 1500;
+      await new Promise(resolve => setTimeout(resolve, delayMs));
+    }
+  } catch (err) {
+    console.error("Error in enrollment auto-scan loop:", err);
+  } finally {
+    enrollIsScanningActive = false;
+  }
+}
+
 window.enrollFingerprint = function(userId: string) {
   const modal = document.getElementById('enroll-modal');
   const user = users.find(u => u.id === userId);
@@ -935,6 +1059,7 @@ window.enrollFingerprint = function(userId: string) {
   enrollUser = user;
   enrollStep = 0;
   enrollScanBuffer = [];
+  lastCapturedData = null; // reset any previous session captured data
 
   const avatar = document.getElementById('enroll-user-avatar') as HTMLImageElement;
   const nameText = document.getElementById('enroll-user-name');
@@ -952,7 +1077,7 @@ window.enrollFingerprint = function(userId: string) {
     // Reset scanner visuals
     scannerIcon.className = "h-14 w-14 text-slate-700 group-hover:text-slate-500 transition-all";
     instruction.textContent = "Place your finger on the scanner above to scan.";
-    statusDetail.textContent = "Scanning step 0 of 3. Click the scanner block to trigger.";
+    statusDetail.textContent = "Scanning step 0 of 3. Click the scanner block or let it auto-scan.";
     
     // Disable save until completed
     saveBtn.disabled = true;
@@ -967,11 +1092,19 @@ window.enrollFingerprint = function(userId: string) {
         <span class="h-2.5 w-2.5 rounded-full bg-slate-800 transition-all"></span>
       `;
     }
+
+    // Render currently enrolled fingers with x delete buttons
+    renderEnrolledFingers(user);
   }
 
   modal.classList.remove('hidden');
   addLiveLog('enroll_start', `Started biometric fingerprint enrollment sequence for ${user.name}.`, user.id);
   lucide.createIcons();
+
+  // Initiate the automatic scanner capture loop
+  setTimeout(() => {
+    runEnrollmentAutoScanLoop();
+  }, 300);
 };
 
 // PHYSICAL HARDWARE SECUGEN INTEGRATION LOGIC
@@ -1164,20 +1297,40 @@ async function handlePhysicalScan() {
     addLiveLog('device_connected', "Comparing scanned template against database registry...");
     
     let matchedUser = null;
-    const enrolledUsers = users.filter(u => !!u.fingerprintId);
+    let matchedFingerName = "Right Index";
 
-    for (const user of enrolledUsers) {
-      const isMatch = await matchPhysicalTemplates(capturedTemplate, user.fingerprintId!);
-      if (isMatch) {
-        matchedUser = user;
-        break;
+    for (const user of users) {
+      if (user.fingerprintId) {
+        const isMatch = await matchPhysicalTemplates(capturedTemplate, user.fingerprintId);
+        if (isMatch) {
+          matchedUser = user;
+          matchedFingerName = "Right Index";
+          break;
+        }
+      }
+
+      if (user.fingers && user.fingers.length > 0) {
+        let found = false;
+        for (const finger of user.fingers) {
+          if (finger.fingerName === "Right Index" && user.fingerprintId === finger.templateData) {
+            continue;
+          }
+          const isMatch = await matchPhysicalTemplates(capturedTemplate, finger.templateData);
+          if (isMatch) {
+            matchedUser = user;
+            matchedFingerName = finger.fingerName;
+            found = true;
+            break;
+          }
+        }
+        if (found) break;
       }
     }
 
     stateScanning.classList.add('hidden');
 
     if (matchedUser) {
-      const punchInfo = recordPunch(matchedUser.id);
+      const punchInfo = recordPunch(matchedUser.id, matchedFingerName);
       
       const avatar = document.getElementById('matched-employee-avatar') as HTMLImageElement;
       const nameTxt = document.getElementById('matched-employee-name');
@@ -1219,152 +1372,214 @@ async function handlePhysicalScan() {
   }
 }
 
-async function triggerEnrollScan() {
-  if (!enrollUser || enrollStep >= enrollMaxSteps) return;
+function triggerEnrollScan(): Promise<boolean> {
+  return new Promise(async (resolve) => {
+    if (!enrollUser || enrollStep >= enrollMaxSteps) {
+      resolve(false);
+      return;
+    }
 
-  const laser = document.getElementById('scanner-laser');
-  const icon = document.getElementById('enroll-scanner-icon');
-  const instruction = document.getElementById('enroll-instruction');
-  const statusDetail = document.getElementById('enroll-status-detail');
-  const dotsContainer = document.getElementById('enroll-progress-dots');
-  const prism = document.getElementById('scanner-prism');
+    const laser = document.getElementById('scanner-laser');
+    const icon = document.getElementById('enroll-scanner-icon');
+    const instruction = document.getElementById('enroll-instruction');
+    const statusDetail = document.getElementById('enroll-status-detail');
+    const dotsContainer = document.getElementById('enroll-progress-dots');
+    const prism = document.getElementById('scanner-prism');
 
-  if (!laser || !icon || !instruction || !statusDetail || !prism) return;
+    if (!laser || !icon || !instruction || !statusDetail || !prism) {
+      resolve(false);
+      return;
+    }
 
-  laser.classList.remove('hidden');
-  laser.style.top = '0%';
-  icon.classList.add('text-cyan-400');
-  icon.classList.remove('text-slate-700');
+    laser.classList.remove('hidden');
+    laser.style.top = '0%';
+    icon.classList.add('text-cyan-400');
+    icon.classList.remove('text-slate-700');
 
-  let pos = 0;
-  const interval = setInterval(() => {
-    pos += 5;
-    laser.style.top = `${pos}%`;
-    if (pos >= 100) pos = 0;
-  }, 40);
+    let pos = 0;
+    const interval = setInterval(() => {
+      pos += 5;
+      laser.style.top = `${pos}%`;
+      if (pos >= 100) pos = 0;
+    }, 40);
 
-  if (driverMode === 'secugen') {
-    instruction.textContent = "Scanner active. Keep your finger pressed firmly on the USB reader prism.";
-    statusDetail.textContent = "Capturing from physical SecuGen HU20 WebAPI...";
-    
-    try {
-      const captureData = await capturePhysicalFingerprint(15000);
-      clearInterval(interval);
-      laser.classList.add('hidden');
+    if (driverMode === 'secugen') {
+      instruction.textContent = "অনুগ্রহ করে আপনার আঙ্গুলটি স্ক্যানার প্রিজমে রাখুন... (Please place your finger on the scanner prism)";
+      statusDetail.textContent = "Capturing from physical SecuGen HU20 WebAPI...";
+      
+      try {
+        const captureData = await capturePhysicalFingerprint(15000);
+        clearInterval(interval);
+        laser.classList.add('hidden');
 
-      if (captureData.ErrorCode !== 0) {
-        throw new Error(captureData.ErrorDescription || `WebAPI Error Code ${captureData.ErrorCode}`);
+        if (captureData.ErrorCode !== 0) {
+          throw new Error(captureData.ErrorDescription || `WebAPI Error Code ${captureData.ErrorCode}`);
+        }
+
+        if (captureData.TemplateBase64) {
+          enrollScanBuffer.push(captureData.TemplateBase64);
+        }
+
+        lastCapturedData = captureData; // Save all response fields to lastCapturedData
+
+        if (captureData.BMPBase64) {
+          prism.innerHTML = `
+            <div class="absolute inset-0 bg-cyan-500/10 flex items-center justify-center">
+              <img src="data:image/bmp;base64,${captureData.BMPBase64}" class="h-24 w-24 object-contain rounded-xl select-none animate-pulse" />
+            </div>
+            <div id="scanner-laser" class="absolute w-full h-[3px] bg-cyan-400 shadow-[0_0_10px_2px_rgba(34,211,238,0.7)] left-0 top-0 transition-all hidden"></div>
+          `;
+        }
+
+        completeStep();
+        resolve(true);
+
+      } catch (err: any) {
+        clearInterval(interval);
+        laser.classList.add('hidden');
+        icon.classList.remove('text-cyan-400');
+        icon.classList.add('text-slate-700');
+
+        playBeep('failure');
+        addLiveLog('scan_failed', `Biometric Enrollment Scan ${enrollStep + 1} Failed: ${err.message || String(err)}`);
+        
+        // Differentiate normal timeout from hard connection failure
+        const isTimeout = err.message && (err.message.includes("Timeout") || err.message.includes("1") || err.message.includes("102"));
+        if (isTimeout) {
+          instruction.textContent = "আঙ্গুলটি সঠিকভাবে রাখুন (Please place your finger correctly on the prism).";
+          statusDetail.textContent = `স্ক্যান করার চেষ্টা করা হচ্ছে... ধাপ ${enrollStep + 1} of 3`;
+        } else {
+          instruction.textContent = "স্ক্যানারটি সংযুক্ত করুন অথবা লোকালহোস্ট সার্টিফিকেট ট্রাস্ট করুন।";
+          statusDetail.innerHTML = `
+            <div class="text-rose-400 font-bold font-mono text-[11px] mb-2">Error: ${err.message || "Failed to fetch"}</div>
+            <div class="bg-slate-950/60 p-3 rounded-xl border border-slate-850/80 text-left text-[11px] text-slate-300 space-y-1">
+              <div class="font-bold text-cyan-400">ধাপ-বাই-ধাপ সমাধান:</div>
+              <div>১. <a href="https://localhost:8443/SGIFPM_STATUS" target="_blank" class="text-cyan-400 underline font-bold font-mono">https://localhost:8443/SGIFPM_STATUS</a> লিংকে যান।</div>
+              <div>২. <strong>Redirect Notice</strong> ও <strong>"Your connection is not private"</strong> পেজগুলোতে ক্লিক করে এগিয়ে যান।</div>
+              <div>৩. <strong>Advanced</strong> -> <strong>Proceed to localhost (unsafe)</strong> সিলেক্ট করুন।</div>
+              <div class="text-amber-300 font-semibold mt-1">⚠️ যদি লোড হতে থাকে: এর মানে SecuGen background service-টি আপনার কম্পিউটারে চালু নেই।</div>
+            </div>
+          `;
+        }
+        resolve(false);
+      }
+    } else {
+      // Simulator Mode fallback
+      instruction.textContent = "Simulation driver processing mock fingerprint signatures...";
+      setTimeout(() => {
+        clearInterval(interval);
+        laser.classList.add('hidden');
+        completeStep();
+        resolve(true);
+      }, 1500);
+    }
+
+    function completeStep() {
+      enrollStep++;
+      playBeep('enroll');
+      addLiveLog('enroll_success', `Scan ${enrollStep} of 3 completed for ${enrollUser?.name}.`, enrollUser?.id);
+
+      // Update progress dots
+      if (dotsContainer) {
+        const dots = dotsContainer.querySelectorAll('span');
+        if (dots[enrollStep - 1]) {
+          dots[enrollStep - 1].className = "h-2.5 w-2.5 rounded-full bg-cyan-400 border border-cyan-300 shadow-lg shadow-cyan-400/50 animate-pulse";
+        }
       }
 
-      if (captureData.TemplateBase64) {
-        enrollScanBuffer.push(captureData.TemplateBase64);
-      }
+      if (enrollStep < enrollMaxSteps) {
+        instruction.textContent = "আঙ্গুলটি উঠিয়ে আবার রাখুন (Lift finger and place it again on the scanner).";
+        statusDetail.textContent = `Scanning step ${enrollStep} of 3 completed.`;
+      } else {
+        instruction.textContent = "Enrollment details captured! Ready to verify database registry.";
+        statusDetail.textContent = "Templates verified. Match rating: 99.8%.";
+        
+        if (enrollScanBuffer.length < enrollMaxSteps) {
+          enrollScanBuffer.push(`MOCK-ISO-TEMPLATE-${Math.random().toString(36).substring(2, 12).toUpperCase()}`);
+        }
 
-      if (captureData.BMPBase64) {
         prism.innerHTML = `
-          <div class="absolute inset-0 bg-cyan-500/10 flex items-center justify-center">
-            <img src="data:image/bmp;base64,${captureData.BMPBase64}" class="h-24 w-24 object-contain rounded-xl select-none animate-pulse" />
-          </div>
+          <i data-lucide="check-circle-2" id="enroll-scanner-icon" class="h-14 w-14 text-emerald-400 animate-bounce"></i>
           <div id="scanner-laser" class="absolute w-full h-[3px] bg-cyan-400 shadow-[0_0_10px_2px_rgba(34,211,238,0.7)] left-0 top-0 transition-all hidden"></div>
         `;
+
+        const saveBtn = document.getElementById('btn-save-enroll') as HTMLButtonElement;
+        if (saveBtn) {
+          saveBtn.disabled = false;
+          saveBtn.className = "text-xs font-bold bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white px-5 py-2.5 rounded-xl transition-all cursor-pointer active:scale-95 shadow-md shadow-cyan-500/10 font-display uppercase tracking-wider";
+        }
       }
-
-      completeStep();
-
-    } catch (err: any) {
-      clearInterval(interval);
-      laser.classList.add('hidden');
-      icon.classList.remove('text-cyan-400');
-      icon.classList.add('text-slate-700');
-
-      playBeep('failure');
-      addLiveLog('scan_failed', `Biometric Enrollment Scan ${enrollStep + 1} Failed: ${err.message || String(err)}`);
-      
-      instruction.textContent = "Capture failed. Trust the localhost certificate to enable the scanner.";
-      statusDetail.innerHTML = `
-        <div class="text-rose-400 font-bold font-mono text-[11px] mb-2">Error: ${err.message || "Failed to fetch"}</div>
-        <div class="bg-slate-950/60 p-3 rounded-xl border border-slate-850/80 text-left text-[11px] text-slate-300 space-y-1">
-          <div class="font-bold text-cyan-400">ধাপ-বাই-ধাপ সমাধান:</div>
-          <div>১. <a href="https://localhost:8443/SGIFPM_STATUS" target="_blank" class="text-cyan-400 underline font-bold font-mono">https://localhost:8443/SGIFPM_STATUS</a> লিংকে যান।</div>
-          <div>২. <strong>Redirect Notice</strong> ও <strong>"Your connection is not private"</strong> পেজগুলোতে ক্লিক করে এগিয়ে যান।</div>
-          <div>৩. <strong>Advanced</strong> -> <strong>Proceed to localhost (unsafe)</strong> সিলেক্ট করুন।</div>
-          <div class="text-amber-300 font-semibold mt-1">⚠️ যদি লোড হতে থাকে (Loading Infinitely): এর মানে SecuGen background service-টি আপনার কম্পিউটারে চালু নেই।</div>
-          
-          <button onclick="window.switchToSimulatorMode(); const modal = document.getElementById('enroll-modal'); if (modal) modal.classList.add('hidden');" class="mt-3 w-full py-2 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 hover:text-white font-bold text-[11px] rounded-xl transition-all cursor-pointer uppercase tracking-wider flex items-center justify-center space-x-1.5">
-            <i data-lucide="cpu" class="h-3.5 w-3.5"></i>
-            <span>সিমুলেটর চালু করুন (Switch to Simulator)</span>
-          </button>
-        </div>
-      `;
+      lucide.createIcons();
     }
-  } else {
-    // Simulator Mode fallback
-    instruction.textContent = "Simulation driver processing mock fingerprint signatures...";
-    setTimeout(() => {
-      clearInterval(interval);
-      laser.classList.add('hidden');
-      completeStep();
-    }, 1500);
-  }
-
-  function completeStep() {
-    enrollStep++;
-    playBeep('enroll');
-    addLiveLog('enroll_success', `Scan ${enrollStep} of 3 completed for ${enrollUser?.name}.`, enrollUser?.id);
-
-    // Update progress dots
-    if (dotsContainer) {
-      const dots = dotsContainer.querySelectorAll('span');
-      if (dots[enrollStep - 1]) {
-        dots[enrollStep - 1].className = "h-2.5 w-2.5 rounded-full bg-cyan-400 border border-cyan-300 shadow-lg shadow-cyan-400/50 animate-pulse";
-      }
-    }
-
-    if (enrollStep < enrollMaxSteps) {
-      instruction.textContent = "Lift finger and place it again on the scanner.";
-      statusDetail.textContent = `Scanning step ${enrollStep} of 3 completed.`;
-    } else {
-      instruction.textContent = "Enrollment details captured! Ready to verify database registry.";
-      statusDetail.textContent = "Templates verified. Match rating: 99.8%.";
-      
-      if (enrollScanBuffer.length < enrollMaxSteps) {
-        enrollScanBuffer.push(`MOCK-ISO-TEMPLATE-${Math.random().toString(36).substring(2, 12).toUpperCase()}`);
-      }
-
-      prism.innerHTML = `
-        <i data-lucide="check-circle-2" id="enroll-scanner-icon" class="h-14 w-14 text-emerald-400 animate-bounce"></i>
-        <div id="scanner-laser" class="absolute w-full h-[3px] bg-cyan-400 shadow-[0_0_10px_2px_rgba(34,211,238,0.7)] left-0 top-0 transition-all hidden"></div>
-      `;
-
-      const saveBtn = document.getElementById('btn-save-enroll') as HTMLButtonElement;
-      if (saveBtn) {
-        saveBtn.disabled = false;
-        saveBtn.className = "text-xs font-bold bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white px-5 py-2.5 rounded-xl transition-all cursor-pointer active:scale-95 shadow-md shadow-cyan-500/10 font-display uppercase tracking-wider";
-      }
-    }
-    lucide.createIcons();
-  }
+  });
 }
 
 async function saveBiometricEnrollment() {
   if (!enrollUser) return;
 
+  const select = document.getElementById('enroll-finger-select') as HTMLSelectElement;
+  const fingerName = select ? select.value : "Right Index";
+
   const capturedTemplate = enrollScanBuffer[enrollScanBuffer.length - 1] || `FP-MOCK-${Math.floor(1000 + Math.random() * 9000)}`;
 
+  const bodyPayload: any = {
+    fingerName,
+    templateData: capturedTemplate
+  };
+
+  // If we have physical capture data, merge all those fields into the body payload!
+  if (lastCapturedData) {
+    Object.assign(bodyPayload, {
+      BMPBase64: lastCapturedData.BMPBase64,
+      ErrorCode: lastCapturedData.ErrorCode,
+      ISOTemplateBase64: lastCapturedData.ISOTemplateBase64,
+      ImageDPI: lastCapturedData.ImageDPI,
+      ImageDataBase64: lastCapturedData.ImageDataBase64,
+      ImageHeight: lastCapturedData.ImageHeight,
+      ImageQuality: lastCapturedData.ImageQuality,
+      ImageWidth: lastCapturedData.ImageWidth,
+      Manufacturer: lastCapturedData.Manufacturer,
+      Model: lastCapturedData.Model,
+      NFIQ: lastCapturedData.NFIQ,
+      SerialNumber: lastCapturedData.SerialNumber,
+      TemplateBase64: lastCapturedData.TemplateBase64
+    });
+  }
+
   try {
-    const res = await fetch(`/api/users/${enrollUser.id}`, {
-      method: 'PUT',
+    const res = await fetch(`/api/users/${enrollUser.id}/fingers`, {
+      method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ fingerprintId: capturedTemplate })
+      body: JSON.stringify(bodyPayload)
     });
 
     if (res.ok) {
       const uIndex = users.findIndex(u => u.id === enrollUser?.id);
       if (uIndex > -1) {
-        users[uIndex].fingerprintId = capturedTemplate;
+        const localUser = users[uIndex];
+        if (!localUser.fingers) localUser.fingers = [];
+        localUser.fingers = localUser.fingers.filter(f => f.fingerName !== fingerName);
+        localUser.fingers.push({
+          fingerName,
+          templateData: capturedTemplate,
+          BMPBase64: lastCapturedData?.BMPBase64,
+          ErrorCode: lastCapturedData?.ErrorCode,
+          ISOTemplateBase64: lastCapturedData?.ISOTemplateBase64,
+          ImageDPI: lastCapturedData?.ImageDPI,
+          ImageDataBase64: lastCapturedData?.ImageDataBase64,
+          ImageHeight: lastCapturedData?.ImageHeight,
+          ImageQuality: lastCapturedData?.ImageQuality,
+          ImageWidth: lastCapturedData?.ImageWidth,
+          Manufacturer: lastCapturedData?.Manufacturer,
+          Model: lastCapturedData?.Model,
+          NFIQ: lastCapturedData?.NFIQ,
+          SerialNumber: lastCapturedData?.SerialNumber,
+          TemplateBase64: lastCapturedData?.TemplateBase64
+        });
+        localUser.fingerprintId = capturedTemplate;
       }
 
-      addLiveLog('enroll_success', `Enrolled finger successfully. Registered biometric hash: ${capturedTemplate.substring(0, 15)}...`, enrollUser.id);
+      addLiveLog('enroll_success', `Enrolled '${fingerName}' successfully. Registered biometric template.`, enrollUser.id);
       initFingerprint(enrollUser.id, 'biometric_enrollment', 'Success');
       
       const modal = document.getElementById('enroll-modal');
@@ -1633,12 +1848,14 @@ document.addEventListener('DOMContentLoaded', () => {
     closeEnrollBtn.addEventListener('click', () => {
       const m = document.getElementById('enroll-modal');
       if (m) m.classList.add('hidden');
+      enrollUser = null;
     });
   }
   if (cancelEnrollBtn) {
     cancelEnrollBtn.addEventListener('click', () => {
       const m = document.getElementById('enroll-modal');
       if (m) m.classList.add('hidden');
+      enrollUser = null;
     });
   }
   if (saveEnrollBtn) {
@@ -1682,8 +1899,8 @@ document.addEventListener('DOMContentLoaded', () => {
       const select = document.getElementById('simulator-user-select') as HTMLSelectElement;
       if (!select) return;
 
-      const userId = select.value;
-      if (!userId) {
+      const rawVal = select.value;
+      if (!rawVal) {
         alert("Please enroll at least one employee fingerprint before triggering simulated scans!");
         return;
       }
@@ -1694,7 +1911,15 @@ document.addEventListener('DOMContentLoaded', () => {
         return;
       }
 
-      recordPunch(userId);
+      let userId = rawVal;
+      let fingerName = "Right Index";
+      if (rawVal.includes(':')) {
+        const parts = rawVal.split(':');
+        userId = parts[0];
+        fingerName = parts[1];
+      }
+
+      recordPunch(userId, fingerName);
     });
   }
 

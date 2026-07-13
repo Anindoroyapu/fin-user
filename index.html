@@ -846,6 +846,35 @@
             </div>
           </div>
 
+          <!-- Select Finger to Enroll -->
+          <div class="grid grid-cols-1 gap-3 bg-slate-950/20 p-4 rounded-2xl border border-slate-850/60">
+            <div class="space-y-1.5">
+              <label class="text-[10px] font-bold text-slate-400 uppercase tracking-wider font-mono flex items-center space-x-1.5">
+                <i data-lucide="info" class="h-3.5 w-3.5 text-cyan-400"></i>
+                <span>নিবন্ধন করার জন্য আঙ্গুল নির্বাচন করুন (Finger Choice)</span>
+              </label>
+              <select id="enroll-finger-select" class="w-full bg-slate-950 border border-slate-850 focus:border-cyan-500 text-slate-100 text-xs rounded-xl px-3 py-2.5 outline-none transition-all cursor-pointer font-medium">
+                <option value="Right Index">Right Index Finger (তর্জনী - ডান হাত)</option>
+                <option value="Right Thumb">Right Thumb (বৃদ্ধাঙ্গুলি - ডান হাত)</option>
+                <option value="Right Middle">Right Middle Finger (মধ্যমা - ডান হাত)</option>
+                <option value="Right Ring">Right Ring Finger (অনামিকা - ডান হাত)</option>
+                <option value="Right Little">Right Little Finger (কনিষ্ঠা - ডান হাত)</option>
+                <option value="Left Index">Left Index Finger (তর্জনী - বাম হাত)</option>
+                <option value="Left Thumb">Left Thumb (বৃদ্ধাঙ্গুলি - বাম হাত)</option>
+                <option value="Left Middle">Left Middle Finger (মধ্যমা - বাম হাত)</option>
+                <option value="Left Ring">Left Ring Finger (অনামিকা - বাম হাত)</option>
+                <option value="Left Little">Left Little Finger (কনিষ্ঠা - বাম হাত)</option>
+              </select>
+            </div>
+
+            <div class="space-y-1.5 pt-1">
+              <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider font-mono block">ইতিমধ্যে নিবন্ধিত আঙ্গুলসমূহ:</span>
+              <div id="enrolled-fingers-list" class="flex flex-wrap gap-1.5 min-h-[24px]">
+                <!-- Loaded dynamically -->
+              </div>
+            </div>
+          </div>
+
           <!-- Scanning Interactive Animation / Area -->
           <div class="flex flex-col items-center justify-center space-y-4 py-4 relative">
             <!-- Simulated Scanner prism container -->
