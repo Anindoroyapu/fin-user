@@ -34,6 +34,10 @@ let enrollScanBuffer: string[] = [];
 let lastCapturedData: any = null;
 let enrollIsScanningActive = false;
 
+// Active Working SecuGen URLs to cache connections
+let activeSecuGenUrl: string | null = null;
+let activeSecuGenMatchUrl: string | null = null;
+
 // Helper to generate formatted time (HH:MM:SS AM/PM)
 function getFormattedTime(): string {
   const now = new Date();
@@ -255,7 +259,11 @@ function updateDatabaseStatus(isConnected: boolean) {
 async function checkLocalSecuGen(): Promise<{ online: boolean; deviceConnected: boolean; error?: string }> {
   const customUrl = loadFromLocalStorage('secugen_api_url', 'https://localhost:8443/SGIFPCapture');
   
-  const rawUrls = [
+  const rawUrls = [];
+  if (activeSecuGenUrl) {
+    rawUrls.push(activeSecuGenUrl);
+  }
+  rawUrls.push(
     customUrl,
     customUrl.replace('SGIFPCapture', 'SGIFPM_Capture'),
     customUrl.replace('SGIFPM_Capture', 'SGIFPCapture'),
@@ -267,7 +275,7 @@ async function checkLocalSecuGen(): Promise<{ online: boolean; deviceConnected: 
     'https://127.0.0.1:8443/SGIFPM_Capture',
     'http://localhost:8000/SGIFPM_Capture',
     'http://127.0.0.1:8000/SGIFPM_Capture'
-  ];
+  );
   
   const urls = Array.from(new Set(rawUrls)).filter(Boolean);
 
@@ -287,6 +295,7 @@ async function checkLocalSecuGen(): Promise<{ online: boolean; deviceConnected: 
 
       if (res.ok) {
         const data = await res.json();
+        activeSecuGenUrl = url; // Cache the working URL!
         const errorCode = data.ErrorCode;
         
         // Error codes:
@@ -301,7 +310,9 @@ async function checkLocalSecuGen(): Promise<{ online: boolean; deviceConnected: 
         return { online: true, deviceConnected: true };
       }
     } catch (err) {
-      // Ignore and check next
+      if (url === activeSecuGenUrl) {
+        activeSecuGenUrl = null; // Clear if cached URL stopped working
+      }
     }
   }
 
@@ -1075,7 +1086,7 @@ window.enrollFingerprint = function(userId: string) {
     idText.textContent = `${user.id} • ${user.department}`;
     
     // Reset scanner visuals
-    scannerIcon.className = "h-14 w-14 text-slate-700 group-hover:text-slate-500 transition-all";
+    scannerIcon.setAttribute('class', "h-14 w-14 text-slate-700 group-hover:text-slate-500 transition-all");
     instruction.textContent = "Place your finger on the scanner above to scan.";
     statusDetail.textContent = "Scanning step 0 of 3. Click the scanner block or let it auto-scan.";
     
@@ -1110,7 +1121,11 @@ window.enrollFingerprint = function(userId: string) {
 // PHYSICAL HARDWARE SECUGEN INTEGRATION LOGIC
 async function capturePhysicalFingerprint(timeoutMs = 15000): Promise<any> {
   const customUrl = loadFromLocalStorage('secugen_api_url', 'https://localhost:8443/SGIFPCapture');
-  const rawUrls = [
+  const rawUrls = [];
+  if (activeSecuGenUrl) {
+    rawUrls.push(activeSecuGenUrl);
+  }
+  rawUrls.push(
     customUrl,
     customUrl.replace('SGIFPCapture', 'SGIFPM_Capture'),
     customUrl.replace('SGIFPM_Capture', 'SGIFPCapture'),
@@ -1122,7 +1137,7 @@ async function capturePhysicalFingerprint(timeoutMs = 15000): Promise<any> {
     'http://localhost:8000/SGIFPM_Capture',
     'https://127.0.0.1:8443/SGIFPM_Capture',
     'http://127.0.0.1:8000/SGIFPM_Capture'
-  ];
+  );
 
   const urls = Array.from(new Set(rawUrls)).filter(Boolean);
 
@@ -1145,10 +1160,14 @@ async function capturePhysicalFingerprint(timeoutMs = 15000): Promise<any> {
       
       if (res.ok) {
         const data = await res.json();
+        activeSecuGenUrl = url; // Cache working URL
         return data;
       }
     } catch (err) {
       console.warn(`Connection to SecuGen WebAPI failed on ${url}:`, err);
+      if (url === activeSecuGenUrl) {
+        activeSecuGenUrl = null; // Clear on failure
+      }
       lastError = err;
     }
   }
@@ -1158,11 +1177,16 @@ async function capturePhysicalFingerprint(timeoutMs = 15000): Promise<any> {
 async function matchPhysicalTemplates(template1: string, template2: string): Promise<boolean> {
   const customUrl = loadFromLocalStorage('secugen_api_url', 'https://localhost:8443/SGIFPCapture');
   
+  const rawUrls = [];
+  if (activeSecuGenMatchUrl) {
+    rawUrls.push(activeSecuGenMatchUrl);
+  }
+  
   // Replace Capture with Match suffix variations for SGIMatchScore
   const customMatch = customUrl.replace('SGIFPCapture', 'SGIMatchScore').replace('SGIFPM_Capture', 'SGIM_MatchScore');
   const customMatchUnderscore = customUrl.replace('SGIFPCapture', 'SGIM_MatchScore').replace('SGIFPM_Capture', 'SGIM_MatchScore');
   
-  const rawUrls = [
+  rawUrls.push(
     customMatch,
     customMatchUnderscore,
     'https://localhost:8443/SGIMatchScore',
@@ -1179,7 +1203,7 @@ async function matchPhysicalTemplates(template1: string, template2: string): Pro
     'http://localhost:8000/SGIFPMatch',
     'https://localhost:8443/SGIFPM_Match',
     'http://localhost:8000/SGIFPM_Match'
-  ];
+  );
 
   const urls = Array.from(new Set(rawUrls)).filter(Boolean);
 
@@ -1197,6 +1221,7 @@ async function matchPhysicalTemplates(template1: string, template2: string): Pro
       });
       if (res.ok) {
         const data = await res.json();
+        activeSecuGenMatchUrl = url; // Cache the working match URL!
         if (data.ErrorCode === 0) {
           // Check for high match score (typically >= 50 or 60 represents a secure match)
           const score = data.MatchingScore !== undefined ? data.MatchingScore : 
@@ -1213,6 +1238,9 @@ async function matchPhysicalTemplates(template1: string, template2: string): Pro
       }
     } catch (err) {
       console.warn(`SecuGen MatchScore POST JSON failed on ${url}:`, err);
+      if (url === activeSecuGenMatchUrl) {
+        activeSecuGenMatchUrl = null;
+      }
     }
 
     try {
@@ -1228,6 +1256,7 @@ async function matchPhysicalTemplates(template1: string, template2: string): Pro
       });
       if (res.ok) {
         const data = await res.json();
+        activeSecuGenMatchUrl = url; // Cache the working match URL!
         if (data.ErrorCode === 0) {
           const score = data.MatchingScore !== undefined ? data.MatchingScore : 
                         (data.MatchScore !== undefined ? data.MatchScore : 
@@ -1243,6 +1272,9 @@ async function matchPhysicalTemplates(template1: string, template2: string): Pro
       }
     } catch (err) {
       console.warn(`SecuGen MatchScore POST Form failed on ${url}:`, err);
+      if (url === activeSecuGenMatchUrl) {
+        activeSecuGenMatchUrl = null;
+      }
     }
 
     try {
@@ -1251,6 +1283,7 @@ async function matchPhysicalTemplates(template1: string, template2: string): Pro
       const res = await fetch(fetchUrl);
       if (res.ok) {
         const data = await res.json();
+        activeSecuGenMatchUrl = url; // Cache the working match URL!
         if (data.ErrorCode === 0) {
           const score = data.MatchingScore !== undefined ? data.MatchingScore : 
                         (data.MatchScore !== undefined ? data.MatchScore : 
@@ -1266,6 +1299,9 @@ async function matchPhysicalTemplates(template1: string, template2: string): Pro
       }
     } catch (err) {
       console.warn(`SecuGen MatchScore GET failed on ${url}:`, err);
+      if (url === activeSecuGenMatchUrl) {
+        activeSecuGenMatchUrl = null;
+      }
     }
   }
   return false;
