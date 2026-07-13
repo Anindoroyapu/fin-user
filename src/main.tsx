@@ -120,7 +120,7 @@ function loadFromLocalStorage(key: string, fallback: any): any {
 }
 
 // FINGERPRINT JS - CLIENT DEVICE INTELLIGENCE INITIALIZATION
-function initFingerprint() {
+function initFingerprint(userId?: string, customAction?: string, customStatus?: string) {
   const fpLoadingEl = document.getElementById('fp-loading-state');
   const fpErrorEl = document.getElementById('fp-error-state');
   const fpSuccessEl = document.getElementById('fp-success-state');
@@ -136,11 +136,39 @@ function initFingerprint() {
   fpSuccessEl.classList.add('hidden');
   fpCopyBtn.classList.add('hidden');
 
+  // Build the linkedId and tags for client device intelligence tagging
+  const getOptions: any = {};
+  let currentTag: any = null;
+
+  if (userId) {
+    const user = users.find(u => u.id === userId);
+    if (user) {
+      getOptions.linkedId = user.id;
+      currentTag = {
+        name: user.name,
+        department: user.department,
+        designation: user.designation,
+        email: user.email || `${user.id.toLowerCase()}@biopass.internal`,
+        action: customAction || 'session_association',
+        status: customStatus || 'Active',
+        timestamp: new Date().toLocaleTimeString()
+      };
+      getOptions.tag = currentTag;
+    }
+  } else {
+    currentTag = {
+      action: customAction || 'anonymous_visit',
+      status: customStatus || 'Standby',
+      timestamp: new Date().toLocaleTimeString()
+    };
+    getOptions.tag = currentTag;
+  }
+
   // Dynamically load the premium client device identification token
   const importFp = new Function("return import('https://fpjscdn.net/v4/Z8T0zfo2gXZjDrnjUNBg')");
   importFp()
     .then((Fingerprint: any) => Fingerprint.start({ region: 'ap' }))
-    .then((fp: any) => fp.get())
+    .then((fp: any) => fp.get(getOptions))
     .then((result: any) => {
       fpData = result;
       fpLoading = false;
@@ -157,8 +185,36 @@ function initFingerprint() {
         fpConfidenceText.textContent = 'High';
       }
 
-      console.log("Fingerprint JS Agent Identified. Visitor ID:", result.visitor_id);
-      addLiveLog('device_connected', `[FINGERPRINT] Identified client device. Visitor ID: ${result.visitor_id}`);
+      // Display the sent metadata / tags in our tagging visualizer panel
+      const tagsContainer = document.getElementById('fp-tags-display-container');
+      const tagTimestamp = document.getElementById('fp-tag-timestamp');
+      const tagLinkedId = document.getElementById('fp-tag-linked-id');
+      const tagName = document.getElementById('fp-tag-name');
+      const tagDept = document.getElementById('fp-tag-dept');
+      const tagDesig = document.getElementById('fp-tag-desig');
+      const tagAction = document.getElementById('fp-tag-action');
+      const tagStatus = document.getElementById('fp-tag-status');
+
+      if (tagsContainer && currentTag) {
+        tagsContainer.classList.remove('hidden');
+        if (tagTimestamp) tagTimestamp.textContent = currentTag.timestamp;
+        if (tagLinkedId) tagLinkedId.textContent = getOptions.linkedId || 'Anonymous';
+        if (tagName) tagName.textContent = currentTag.name || 'Anonymous Visitor';
+        if (tagDept) tagDept.textContent = currentTag.department || 'N/A';
+        if (tagDesig) tagDesig.textContent = currentTag.designation || 'N/A';
+        if (tagAction) tagAction.textContent = currentTag.action;
+        if (tagStatus) {
+          tagStatus.textContent = currentTag.status;
+          if (currentTag.status === 'Success' || currentTag.status === 'Verified' || currentTag.status === 'Active' || currentTag.status === 'Present') {
+            tagStatus.className = 'text-emerald-400 font-semibold';
+          } else {
+            tagStatus.className = 'text-amber-400 font-semibold';
+          }
+        }
+      }
+
+      console.log("Fingerprint JS Agent Identified with Tagging. Visitor ID:", result.visitor_id, "Tags:", getOptions.tag);
+      addLiveLog('device_connected', `[FINGERPRINT] Identified client device and sent tags. Visitor ID: ${result.visitor_id}`);
     })
     .catch((err: any) => {
       fpLoading = false;
@@ -195,10 +251,23 @@ function updateDatabaseStatus(isConnected: boolean) {
 }
 
 async function checkLocalSecuGen(): Promise<{ online: boolean; deviceConnected: boolean; error?: string }> {
-  const urls = [
+  const customUrl = loadFromLocalStorage('secugen_api_url', 'https://localhost:8443/SGIFPCapture');
+  
+  const rawUrls = [
+    customUrl,
+    customUrl.replace('SGIFPCapture', 'SGIFPM_Capture'),
+    customUrl.replace('SGIFPM_Capture', 'SGIFPCapture'),
+    'https://localhost:8443/SGIFPCapture',
+    'https://127.0.0.1:8443/SGIFPCapture',
+    'http://localhost:8000/SGIFPCapture',
+    'http://127.0.0.1:8000/SGIFPCapture',
     'https://localhost:8443/SGIFPM_Capture',
-    'https://127.0.0.1:8443/SGIFPM_Capture'
+    'https://127.0.0.1:8443/SGIFPM_Capture',
+    'http://localhost:8000/SGIFPM_Capture',
+    'http://127.0.0.1:8000/SGIFPM_Capture'
   ];
+  
+  const urls = Array.from(new Set(rawUrls)).filter(Boolean);
 
   for (const url of urls) {
     try {
@@ -232,25 +301,6 @@ async function checkLocalSecuGen(): Promise<{ online: boolean; deviceConnected: 
     } catch (err) {
       // Ignore and check next
     }
-  }
-
-  // Fallback check on HTTP if needed, though browsers block it due to Mixed Content
-  try {
-    const fetchUrl = `http://localhost:8000/SGIFPM_Capture?Timeout=10&Quality=50&TemplateFormat=ISO`;
-    const controller = new AbortController();
-    const id = setTimeout(() => controller.abort(), 1000);
-    const res = await fetch(fetchUrl, { signal: controller.signal });
-    clearTimeout(id);
-    if (res.ok) {
-      const data = await res.json();
-      const errorCode = data.ErrorCode;
-      if (errorCode === 103 || errorCode === 105 || errorCode === 100) {
-        return { online: true, deviceConnected: false, error: data.ErrorDescription || "Sensor unplugged" };
-      }
-      return { online: true, deviceConnected: true };
-    }
-  } catch (err) {
-    // ignore
   }
 
   return { online: false, deviceConnected: false };
@@ -349,6 +399,7 @@ async function fetchUsers() {
         renderDashboard();
         renderUsers();
         populateSimulatorDropdown();
+        populateFpTagDropdown();
       }
     } else {
       updateDatabaseStatus(false);
@@ -447,6 +498,7 @@ function recordPunch(userId: string): { status: string; isClockOut: boolean } | 
       saveToLocalStorage('bio_attendance', attendance);
       addLiveLog('scan_success', `Clock-Out Verified: ${matchedUser.name} punched out.`, matchedUser.id);
       renderDashboard();
+      initFingerprint(userId, 'biometric_punch', 'Clock Out');
       return { status: record.status, isClockOut: true };
     } else {
       addLiveLog('scan_failed', `Duplicate Scan Blocked: ${matchedUser.name} has already punched out today.`, matchedUser.id);
@@ -480,6 +532,7 @@ function recordPunch(userId: string): { status: string; isClockOut: boolean } | 
 
   addLiveLog('scan_success', `Punch Registered: ${matchedUser.name} identified as ${status}.`, matchedUser.id);
   renderDashboard();
+  initFingerprint(userId, 'biometric_punch', status);
   return { status, isClockOut: false };
 }
 
@@ -810,6 +863,20 @@ function populateSimulatorDropdown() {
   });
 }
 
+// POPULATE SELECT DROPDOWN FOR FINGERPRINT TAGGING
+function populateFpTagDropdown() {
+  const dropdown = document.getElementById('fp-tag-user-select') as HTMLSelectElement;
+  if (!dropdown) return;
+
+  dropdown.innerHTML = '<option value="">-- No User Linked (Anonymous) --</option>';
+  users.forEach(user => {
+    const opt = document.createElement('option');
+    opt.value = user.id;
+    opt.textContent = `${user.name} (${user.id})`;
+    dropdown.appendChild(opt);
+  });
+}
+
 // ADD/EDIT EMPLOYEE MODAL MANAGEMENT
 function openRegisterModal(userToEdit?: User) {
   const modal = document.getElementById('register-employee-modal');
@@ -909,12 +976,22 @@ window.enrollFingerprint = function(userId: string) {
 
 // PHYSICAL HARDWARE SECUGEN INTEGRATION LOGIC
 async function capturePhysicalFingerprint(timeoutMs = 15000): Promise<any> {
-  const urls = [
+  const customUrl = loadFromLocalStorage('secugen_api_url', 'https://localhost:8443/SGIFPCapture');
+  const rawUrls = [
+    customUrl,
+    customUrl.replace('SGIFPCapture', 'SGIFPM_Capture'),
+    customUrl.replace('SGIFPM_Capture', 'SGIFPCapture'),
+    'https://localhost:8443/SGIFPCapture',
+    'http://localhost:8000/SGIFPCapture',
+    'https://127.0.0.1:8443/SGIFPCapture',
+    'http://127.0.0.1:8000/SGIFPCapture',
     'https://localhost:8443/SGIFPM_Capture',
     'http://localhost:8000/SGIFPM_Capture',
     'https://127.0.0.1:8443/SGIFPM_Capture',
     'http://127.0.0.1:8000/SGIFPM_Capture'
   ];
+
+  const urls = Array.from(new Set(rawUrls)).filter(Boolean);
 
   let lastError: any = null;
   for (const url of urls) {
@@ -922,11 +999,17 @@ async function capturePhysicalFingerprint(timeoutMs = 15000): Promise<any> {
       console.log(`Attempting physical capture on: ${url}`);
       // Query parameters for quality, timeout, and format
       const fetchUrl = `${url}?Timeout=${timeoutMs}&Quality=50&TemplateFormat=ISO`;
+      
+      const controller = new AbortController();
+      const id = setTimeout(() => controller.abort(), timeoutMs + 2000);
+      
       const res = await fetch(fetchUrl, {
         method: 'GET',
         headers: { 'Accept': 'application/json' },
-        signal: AbortSignal.timeout(timeoutMs + 2000)
+        signal: controller.signal
       });
+      clearTimeout(id);
+      
       if (res.ok) {
         const data = await res.json();
         return data;
@@ -940,12 +1023,26 @@ async function capturePhysicalFingerprint(timeoutMs = 15000): Promise<any> {
 }
 
 async function matchPhysicalTemplates(template1: string, template2: string): Promise<boolean> {
-  const urls = [
+  const customUrl = loadFromLocalStorage('secugen_api_url', 'https://localhost:8443/SGIFPCapture');
+  
+  // Replace Capture with Match suffix variations
+  const customMatch = customUrl.replace('SGIFPCapture', 'SGIFPMatch').replace('SGIFPM_Capture', 'SGIFPM_Match');
+  const customMatchUnderscore = customUrl.replace('SGIFPCapture', 'SGIFPM_Match').replace('SGIFPM_Capture', 'SGIFPM_Match');
+  
+  const rawUrls = [
+    customMatch,
+    customMatchUnderscore,
+    'https://localhost:8443/SGIFPMatch',
+    'http://localhost:8000/SGIFPMatch',
+    'https://127.0.0.1:8443/SGIFPMatch',
+    'http://127.0.0.1:8000/SGIFPMatch',
     'https://localhost:8443/SGIFPM_Match',
     'http://localhost:8000/SGIFPM_Match',
     'https://127.0.0.1:8443/SGIFPM_Match',
     'http://127.0.0.1:8000/SGIFPM_Match'
   ];
+
+  const urls = Array.from(new Set(rawUrls)).filter(Boolean);
 
   for (const url of urls) {
     try {
@@ -1268,12 +1365,14 @@ async function saveBiometricEnrollment() {
       }
 
       addLiveLog('enroll_success', `Enrolled finger successfully. Registered biometric hash: ${capturedTemplate.substring(0, 15)}...`, enrollUser.id);
+      initFingerprint(enrollUser.id, 'biometric_enrollment', 'Success');
       
       const modal = document.getElementById('enroll-modal');
       if (modal) modal.classList.add('hidden');
 
       renderUsers();
       populateSimulatorDropdown();
+      populateFpTagDropdown();
     } else {
       alert("Failed to write biometric data to SQL server.");
     }
@@ -1307,6 +1406,7 @@ window.deleteEmployee = async function(userId: string) {
         renderDashboard();
         renderUsers();
         populateSimulatorDropdown();
+        populateFpTagDropdown();
       } else {
         alert("Failed to delete user profile from MySQL.");
       }
@@ -1322,6 +1422,34 @@ document.addEventListener('DOMContentLoaded', () => {
   attendance = loadFromLocalStorage('bio_attendance', []);
   logs = loadFromLocalStorage('bio_logs', []);
 
+  // Initialize custom SecuGen API URL configuration
+  const secugenApiUrlInp = document.getElementById('secugen-api-url-input') as HTMLInputElement;
+  const btnSaveSecugenApiUrl = document.getElementById('btn-save-secugen-api-url');
+  const consoleHostUrlPreview = document.getElementById('console-host-url-preview');
+  const currentSecugenUrl = loadFromLocalStorage('secugen_api_url', 'https://localhost:8443/SGIFPCapture');
+  
+  if (secugenApiUrlInp) {
+    secugenApiUrlInp.value = currentSecugenUrl;
+  }
+  if (consoleHostUrlPreview) {
+    consoleHostUrlPreview.textContent = currentSecugenUrl;
+  }
+
+  if (btnSaveSecugenApiUrl && secugenApiUrlInp) {
+    btnSaveSecugenApiUrl.addEventListener('click', () => {
+      let val = secugenApiUrlInp.value.trim();
+      if (!val) {
+        val = 'https://localhost:8443/SGIFPCapture';
+      }
+      saveToLocalStorage('secugen_api_url', val);
+      if (consoleHostUrlPreview) {
+        consoleHostUrlPreview.textContent = val;
+      }
+      addLiveLog('device_connected', `SecuGen API endpoint URL updated to: ${val}`);
+      performScannerStatusCheck();
+    });
+  }
+
   // Set default logging message on launch
   if (logs.length === 0) {
     addLiveLog('device_connected', 'Biometric scanner daemon services started on localhost.');
@@ -1336,6 +1464,22 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Initialize fingerprint
   initFingerprint();
+
+  // Handle fingerprint tag button click
+  const fpApplyTagBtn = document.getElementById('fp-apply-tag-btn');
+  const fpTagSelect = document.getElementById('fp-tag-user-select') as HTMLSelectElement;
+  if (fpApplyTagBtn && fpTagSelect) {
+    fpApplyTagBtn.addEventListener('click', () => {
+      const selectedUserId = fpTagSelect.value;
+      if (selectedUserId) {
+        initFingerprint(selectedUserId, 'session_association', 'Active');
+        addLiveLog('device_connected', `Applied Fingerprint Pro session tag matching User ID: ${selectedUserId}`);
+      } else {
+        initFingerprint(undefined, 'anonymous_visit', 'Standby');
+        addLiveLog('device_connected', 'Cleared Fingerprint Pro session tag association.');
+      }
+    });
+  }
 
   // Navigation tab click routing
   document.querySelectorAll('#sidebar-nav button').forEach(btn => {
