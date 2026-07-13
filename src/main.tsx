@@ -1158,21 +1158,27 @@ async function capturePhysicalFingerprint(timeoutMs = 15000): Promise<any> {
 async function matchPhysicalTemplates(template1: string, template2: string): Promise<boolean> {
   const customUrl = loadFromLocalStorage('secugen_api_url', 'https://localhost:8443/SGIFPCapture');
   
-  // Replace Capture with Match suffix variations
-  const customMatch = customUrl.replace('SGIFPCapture', 'SGIFPMatch').replace('SGIFPM_Capture', 'SGIFPM_Match');
-  const customMatchUnderscore = customUrl.replace('SGIFPCapture', 'SGIFPM_Match').replace('SGIFPM_Capture', 'SGIFPM_Match');
+  // Replace Capture with Match suffix variations for SGIMatchScore
+  const customMatch = customUrl.replace('SGIFPCapture', 'SGIMatchScore').replace('SGIFPM_Capture', 'SGIM_MatchScore');
+  const customMatchUnderscore = customUrl.replace('SGIFPCapture', 'SGIM_MatchScore').replace('SGIFPM_Capture', 'SGIM_MatchScore');
   
   const rawUrls = [
     customMatch,
     customMatchUnderscore,
+    'https://localhost:8443/SGIMatchScore',
+    'http://localhost:8000/SGIMatchScore',
+    'https://127.0.0.1:8443/SGIMatchScore',
+    'http://127.0.0.1:8000/SGIMatchScore',
+    'https://localhost:8443/SGIM_MatchScore',
+    'http://localhost:8000/SGIM_MatchScore',
+    'https://127.0.0.1:8443/SGIM_MatchScore',
+    'http://127.0.0.1:8000/SGIM_MatchScore',
+    // Fallback to standard SGIMatch endpoints
+    customUrl.replace('SGIFPCapture', 'SGIFPMatch').replace('SGIFPM_Capture', 'SGIFPM_Match'),
     'https://localhost:8443/SGIFPMatch',
     'http://localhost:8000/SGIFPMatch',
-    'https://127.0.0.1:8443/SGIFPMatch',
-    'http://127.0.0.1:8000/SGIFPMatch',
     'https://localhost:8443/SGIFPM_Match',
-    'http://localhost:8000/SGIFPM_Match',
-    'https://127.0.0.1:8443/SGIFPM_Match',
-    'http://127.0.0.1:8000/SGIFPM_Match'
+    'http://localhost:8000/SGIFPM_Match'
   ];
 
   const urls = Array.from(new Set(rawUrls)).filter(Boolean);
@@ -1191,12 +1197,22 @@ async function matchPhysicalTemplates(template1: string, template2: string): Pro
       });
       if (res.ok) {
         const data = await res.json();
-        if (data.ErrorCode === 0 && (data.Matched === true || data.matched === true || data.Matched === 'TRUE')) {
-          return true;
+        if (data.ErrorCode === 0) {
+          // Check for high match score (typically >= 50 or 60 represents a secure match)
+          const score = data.MatchingScore !== undefined ? data.MatchingScore : 
+                        (data.MatchScore !== undefined ? data.MatchScore : 
+                        (data.Score !== undefined ? data.Score : null));
+          
+          if (score !== null && score >= 50) {
+            return true;
+          }
+          if (data.Matched === true || data.matched === true || data.Matched === 'TRUE') {
+            return true;
+          }
         }
       }
     } catch (err) {
-      console.warn(`SecuGen Match POST JSON failed on ${url}:`, err);
+      console.warn(`SecuGen MatchScore POST JSON failed on ${url}:`, err);
     }
 
     try {
@@ -1212,12 +1228,21 @@ async function matchPhysicalTemplates(template1: string, template2: string): Pro
       });
       if (res.ok) {
         const data = await res.json();
-        if (data.ErrorCode === 0 && (data.Matched === true || data.matched === true || data.Matched === 'TRUE')) {
-          return true;
+        if (data.ErrorCode === 0) {
+          const score = data.MatchingScore !== undefined ? data.MatchingScore : 
+                        (data.MatchScore !== undefined ? data.MatchScore : 
+                        (data.Score !== undefined ? data.Score : null));
+          
+          if (score !== null && score >= 50) {
+            return true;
+          }
+          if (data.Matched === true || data.matched === true || data.Matched === 'TRUE') {
+            return true;
+          }
         }
       }
     } catch (err) {
-      console.warn(`SecuGen Match POST Form failed on ${url}:`, err);
+      console.warn(`SecuGen MatchScore POST Form failed on ${url}:`, err);
     }
 
     try {
@@ -1226,12 +1251,21 @@ async function matchPhysicalTemplates(template1: string, template2: string): Pro
       const res = await fetch(fetchUrl);
       if (res.ok) {
         const data = await res.json();
-        if (data.ErrorCode === 0 && (data.Matched === true || data.matched === true || data.Matched === 'TRUE')) {
-          return true;
+        if (data.ErrorCode === 0) {
+          const score = data.MatchingScore !== undefined ? data.MatchingScore : 
+                        (data.MatchScore !== undefined ? data.MatchScore : 
+                        (data.Score !== undefined ? data.Score : null));
+          
+          if (score !== null && score >= 50) {
+            return true;
+          }
+          if (data.Matched === true || data.matched === true || data.Matched === 'TRUE') {
+            return true;
+          }
         }
       }
     } catch (err) {
-      console.warn(`SecuGen Match GET failed on ${url}:`, err);
+      console.warn(`SecuGen MatchScore GET failed on ${url}:`, err);
     }
   }
   return false;
@@ -1632,7 +1666,7 @@ window.deleteEmployee = async function(userId: string) {
 };
 
 // INITIALIZE EVENT LISTENERS & DELEGATION
-document.addEventListener('DOMContentLoaded', () => {
+function initApplication() {
   // Load local stores
   attendance = loadFromLocalStorage('bio_attendance', []);
   logs = loadFromLocalStorage('bio_logs', []);
@@ -2055,7 +2089,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Initialize view displays
   lucide.createIcons();
-});
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initApplication);
+} else {
+  initApplication();
+}
 
 // DECLARE ON WINDOW FOR INLINE ONCLICK HANDLERS
 declare global {
