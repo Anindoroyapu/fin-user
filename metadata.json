@@ -1,0 +1,6 @@
+{
+  "name": "Fingerprint Attendance System",
+  "description": "A high-speed fingerprint-based attendance enrollment, tracking, and management system with simulated USB device support.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
