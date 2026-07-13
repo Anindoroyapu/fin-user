@@ -29,7 +29,7 @@ let fpError: any = null;
 // Biometric enrollment workflow states
 let enrollUser: User | null = null;
 let enrollStep = 0;
-const enrollMaxSteps = 3;
+const enrollMaxSteps = 1;
 let enrollScanBuffer: string[] = [];
 let lastCapturedData: any = null;
 let enrollIsScanningActive = false;
@@ -1088,18 +1088,16 @@ window.enrollFingerprint = function(userId: string) {
     // Reset scanner visuals
     scannerIcon.setAttribute('class', "h-14 w-14 text-slate-700 group-hover:text-slate-500 transition-all");
     instruction.textContent = "Place your finger on the scanner above to scan.";
-    statusDetail.textContent = "Scanning step 0 of 3. Click the scanner block or let it auto-scan.";
+    statusDetail.textContent = "Fingerprint scan will start automatically. Keep your finger on the scanner.";
     
-    // Disable save until completed
+    // Disable save until completed (will auto-save)
     saveBtn.disabled = true;
     saveBtn.className = "text-xs font-bold bg-cyan-500/20 text-slate-500 px-5 py-2.5 rounded-xl cursor-not-allowed transition-all font-display uppercase tracking-wider";
 
-    // Reset progress dots
+    // Reset progress dots (single dot for one-step enrollment)
     const dotsContainer = document.getElementById('enroll-progress-dots');
     if (dotsContainer) {
       dotsContainer.innerHTML = `
-        <span class="h-2.5 w-2.5 rounded-full bg-slate-800 transition-all"></span>
-        <span class="h-2.5 w-2.5 rounded-full bg-slate-800 transition-all"></span>
         <span class="h-2.5 w-2.5 rounded-full bg-slate-800 transition-all"></span>
       `;
     }
@@ -1517,7 +1515,7 @@ function triggerEnrollScan(): Promise<boolean> {
         const isTimeout = err.message && (err.message.includes("Timeout") || err.message.includes("1") || err.message.includes("102"));
         if (isTimeout) {
           instruction.textContent = "আঙ্গুলটি সঠিকভাবে রাখুন (Please place your finger correctly on the prism).";
-          statusDetail.textContent = `স্ক্যান করার চেষ্টা করা হচ্ছে... ধাপ ${enrollStep + 1} of 3`;
+          statusDetail.textContent = `পুনরায় স্ক্যান করার চেষ্টা করা হচ্ছে... (Retrying scan...)`;
         } else {
           instruction.textContent = "স্ক্যানারটি সংযুক্ত করুন অথবা লোকালহোস্ট সার্টিফিকেট ট্রাস্ট করুন।";
           statusDetail.innerHTML = `
@@ -1547,39 +1545,34 @@ function triggerEnrollScan(): Promise<boolean> {
     function completeStep() {
       enrollStep++;
       playBeep('enroll');
-      addLiveLog('enroll_success', `Scan ${enrollStep} of 3 completed for ${enrollUser?.name}.`, enrollUser?.id);
+      addLiveLog('enroll_success', `Scan successful for ${enrollUser?.name}. Auto-saving enrollment...`, enrollUser?.id);
 
-      // Update progress dots
+      // Update progress dot
       if (dotsContainer) {
         const dots = dotsContainer.querySelectorAll('span');
-        if (dots[enrollStep - 1]) {
-          dots[enrollStep - 1].className = "h-2.5 w-2.5 rounded-full bg-cyan-400 border border-cyan-300 shadow-lg shadow-cyan-400/50 animate-pulse";
+        if (dots[0]) {
+          dots[0].className = "h-2.5 w-2.5 rounded-full bg-cyan-400 border border-cyan-300 shadow-lg shadow-cyan-400/50 animate-pulse";
         }
       }
 
-      if (enrollStep < enrollMaxSteps) {
-        instruction.textContent = "আঙ্গুলটি উঠিয়ে আবার রাখুন (Lift finger and place it again on the scanner).";
-        statusDetail.textContent = `Scanning step ${enrollStep} of 3 completed.`;
-      } else {
-        instruction.textContent = "Enrollment details captured! Ready to verify database registry.";
-        statusDetail.textContent = "Templates verified. Match rating: 99.8%.";
-        
-        if (enrollScanBuffer.length < enrollMaxSteps) {
-          enrollScanBuffer.push(`MOCK-ISO-TEMPLATE-${Math.random().toString(36).substring(2, 12).toUpperCase()}`);
-        }
+      instruction.textContent = "Fingerprint captured successfully! Saving to database...";
+      statusDetail.textContent = "Auto-saving biometric template. Please wait...";
 
-        prism.innerHTML = `
-          <i data-lucide="check-circle-2" id="enroll-scanner-icon" class="h-14 w-14 text-emerald-400 animate-bounce"></i>
-          <div id="scanner-laser" class="absolute w-full h-[3px] bg-cyan-400 shadow-[0_0_10px_2px_rgba(34,211,238,0.7)] left-0 top-0 transition-all hidden"></div>
-        `;
-
-        const saveBtn = document.getElementById('btn-save-enroll') as HTMLButtonElement;
-        if (saveBtn) {
-          saveBtn.disabled = false;
-          saveBtn.className = "text-xs font-bold bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white px-5 py-2.5 rounded-xl transition-all cursor-pointer active:scale-95 shadow-md shadow-cyan-500/10 font-display uppercase tracking-wider";
-        }
+      if (enrollScanBuffer.length === 0) {
+        enrollScanBuffer.push(`MOCK-ISO-TEMPLATE-${Math.random().toString(36).substring(2, 12).toUpperCase()}`);
       }
+
+      prism.innerHTML = `
+        <i data-lucide="check-circle-2" id="enroll-scanner-icon" class="h-14 w-14 text-emerald-400 animate-bounce"></i>
+        <div id="scanner-laser" class="absolute w-full h-[3px] bg-cyan-400 shadow-[0_0_10px_2px_rgba(34,211,238,0.7)] left-0 top-0 transition-all hidden"></div>
+      `;
+
       lucide.createIcons();
+
+      // Auto-save immediately after successful scan
+      setTimeout(() => {
+        saveBiometricEnrollment();
+      }, 500);
     }
   });
 }
