@@ -1,4 +1,4 @@
-import { User, AttendanceRecord, LiveLog } from './types';
+import { User, AttendanceRecord, LiveLog } from "./types";
 
 // Global CDN Declarations
 declare const lucide: any;
@@ -7,19 +7,19 @@ declare const lucide: any;
 let users: User[] = [];
 let attendance: AttendanceRecord[] = [];
 let logs: LiveLog[] = [];
-let activeTab: 'dashboard' | 'users' | 'console' | 'hardware' = 'dashboard';
+let activeTab: "dashboard" | "users" | "console" | "hardware" = "dashboard";
 let soundEnabled = true;
-let driverMode: 'secugen' | 'bridge' = 'secugen';
+let driverMode: "secugen" | "bridge" = "secugen";
 let isScannerUsbPlugged = false;
 let isKeyboardWedgeActive = false;
-let keyboardBuffer = '';
-let hardwareStatus: 'connected' | 'disconnected' | 'offline' = 'connected';
+let keyboardBuffer = "";
+let hardwareStatus: "connected" | "disconnected" | "offline" = "connected";
 
 // Filter & search states
-let dashboardDeptFilter = 'All';
-let userSearchQuery = '';
-let userDeptFilter = 'All';
-let userBioFilter = 'All';
+let dashboardDeptFilter = "All";
+let userSearchQuery = "";
+let userDeptFilter = "All";
+let userBioFilter = "All";
 
 // Fingerprint identification state
 let fpData: any = null;
@@ -42,38 +42,40 @@ let activeSecuGenMatchUrl: string | null = null;
 function getFormattedTime(): string {
   const now = new Date();
   let hours = now.getHours();
-  const minutes = now.getMinutes().toString().padStart(2, '0');
-  const seconds = now.getSeconds().toString().padStart(2, '0');
-  const ampm = hours >= 12 ? 'PM' : 'AM';
+  const minutes = now.getMinutes().toString().padStart(2, "0");
+  const seconds = now.getSeconds().toString().padStart(2, "0");
+  const ampm = hours >= 12 ? "PM" : "AM";
   hours = hours % 12;
   hours = hours ? hours : 12; // the hour '0' should be '12'
-  return `${hours.toString().padStart(2, '0')}:${minutes}:${seconds} ${ampm}`;
+  return `${hours.toString().padStart(2, "0")}:${minutes}:${seconds} ${ampm}`;
 }
 
 // Play synthesizer sound beeps using Web Audio API
-function playBeep(type: 'success' | 'failure' | 'enroll') {
+function playBeep(type: "success" | "failure" | "enroll") {
   if (!soundEnabled) return;
   try {
-    const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+    const audioCtx = new (
+      window.AudioContext || (window as any).webkitAudioContext
+    )();
     const oscillator = audioCtx.createOscillator();
     const gainNode = audioCtx.createGain();
     oscillator.connect(gainNode);
     gainNode.connect(audioCtx.destination);
 
-    if (type === 'success') {
-      oscillator.type = 'sine';
+    if (type === "success") {
+      oscillator.type = "sine";
       oscillator.frequency.setValueAtTime(880, audioCtx.currentTime); // high tone
       gainNode.gain.setValueAtTime(0.08, audioCtx.currentTime);
       oscillator.start();
       oscillator.stop(audioCtx.currentTime + 0.12);
-    } else if (type === 'failure') {
-      oscillator.type = 'sawtooth';
+    } else if (type === "failure") {
+      oscillator.type = "sawtooth";
       oscillator.frequency.setValueAtTime(220, audioCtx.currentTime); // low harsh tone
       gainNode.gain.setValueAtTime(0.08, audioCtx.currentTime);
       oscillator.start();
       oscillator.stop(audioCtx.currentTime + 0.35);
-    } else if (type === 'enroll') {
-      oscillator.type = 'triangle';
+    } else if (type === "enroll") {
+      oscillator.type = "triangle";
       oscillator.frequency.setValueAtTime(554, audioCtx.currentTime); // pleasant transition
       gainNode.gain.setValueAtTime(0.08, audioCtx.currentTime);
       oscillator.start();
@@ -85,26 +87,28 @@ function playBeep(type: 'success' | 'failure' | 'enroll') {
 }
 
 // Log live activity and display in terminals
-function addLiveLog(type: LiveLog['type'], message: string, userId?: string) {
+function addLiveLog(type: LiveLog["type"], message: string, userId?: string) {
   const newLog: LiveLog = {
     id: `LOG-${Math.floor(100000 + Math.random() * 900000)}`,
     timestamp: getFormattedTime(),
-    userId: userId || 'SYSTEM',
-    userName: userId ? (users.find(u => u.id === userId)?.name || 'Unknown') : 'SYSTEM',
+    userId: userId || "SYSTEM",
+    userName: userId
+      ? users.find((u) => u.id === userId)?.name || "Unknown"
+      : "SYSTEM",
     type,
-    message
+    message,
   };
 
   logs = [newLog, ...logs].slice(0, 50); // Keep max 50 entries
-  saveToLocalStorage('bio_logs', logs);
+  saveToLocalStorage("bio_logs", logs);
 
   // Sound response triggers
-  if (type === 'scan_success') {
-    playBeep('success');
-  } else if (type === 'scan_failed') {
-    playBeep('failure');
-  } else if (type === 'enroll_success' || type === 'enroll_start') {
-    playBeep('enroll');
+  if (type === "scan_success") {
+    playBeep("success");
+  } else if (type === "scan_failed") {
+    playBeep("failure");
+  } else if (type === "enroll_success" || type === "enroll_start") {
+    playBeep("enroll");
   }
 
   renderLogs();
@@ -126,28 +130,40 @@ function loadFromLocalStorage(key: string, fallback: any): any {
 }
 
 // FINGERPRINT JS - CLIENT DEVICE INTELLIGENCE INITIALIZATION
-function initFingerprint(userId?: string, customAction?: string, customStatus?: string) {
-  const fpLoadingEl = document.getElementById('fp-loading-state');
-  const fpErrorEl = document.getElementById('fp-error-state');
-  const fpSuccessEl = document.getElementById('fp-success-state');
-  const fpCopyBtn = document.getElementById('fp-copy-btn');
-  const fpVisitorIdText = document.getElementById('fp-visitor-id-text');
-  const fpConfidenceText = document.getElementById('fp-confidence-text');
+function initFingerprint(
+  userId?: string,
+  customAction?: string,
+  customStatus?: string,
+) {
+  const fpLoadingEl = document.getElementById("fp-loading-state");
+  const fpErrorEl = document.getElementById("fp-error-state");
+  const fpSuccessEl = document.getElementById("fp-success-state");
+  const fpCopyBtn = document.getElementById("fp-copy-btn");
+  const fpVisitorIdText = document.getElementById("fp-visitor-id-text");
+  const fpConfidenceText = document.getElementById("fp-confidence-text");
 
-  if (!fpLoadingEl || !fpErrorEl || !fpSuccessEl || !fpCopyBtn || !fpVisitorIdText || !fpConfidenceText) return;
+  if (
+    !fpLoadingEl ||
+    !fpErrorEl ||
+    !fpSuccessEl ||
+    !fpCopyBtn ||
+    !fpVisitorIdText ||
+    !fpConfidenceText
+  )
+    return;
 
   fpLoading = true;
-  fpLoadingEl.classList.remove('hidden');
-  fpErrorEl.classList.add('hidden');
-  fpSuccessEl.classList.add('hidden');
-  fpCopyBtn.classList.add('hidden');
+  fpLoadingEl.classList.remove("hidden");
+  fpErrorEl.classList.add("hidden");
+  fpSuccessEl.classList.add("hidden");
+  fpCopyBtn.classList.add("hidden");
 
   // Build the linkedId and tags for client device intelligence tagging
   const getOptions: any = {};
   let currentTag: any = null;
 
   if (userId) {
-    const user = users.find(u => u.id === userId);
+    const user = users.find((u) => u.id === userId);
     if (user) {
       getOptions.linkedId = user.id;
       currentTag = {
@@ -155,89 +171,111 @@ function initFingerprint(userId?: string, customAction?: string, customStatus?: 
         department: user.department,
         designation: user.designation,
         email: user.email || `${user.id.toLowerCase()}@biopass.internal`,
-        action: customAction || 'session_association',
-        status: customStatus || 'Active',
-        timestamp: new Date().toLocaleTimeString()
+        action: customAction || "session_association",
+        status: customStatus || "Active",
+        timestamp: new Date().toLocaleTimeString(),
       };
       getOptions.tag = currentTag;
     }
   } else {
     currentTag = {
-      action: customAction || 'anonymous_visit',
-      status: customStatus || 'Standby',
-      timestamp: new Date().toLocaleTimeString()
+      action: customAction || "anonymous_visit",
+      status: customStatus || "Standby",
+      timestamp: new Date().toLocaleTimeString(),
     };
     getOptions.tag = currentTag;
   }
 
   // Dynamically load the premium client device identification token
-  const importFp = new Function("return import('https://fpjscdn.net/v4/Z8T0zfo2gXZjDrnjUNBg')");
+  const importFp = new Function(
+    "return import('https://fpjscdn.net/v4/Z8T0zfo2gXZjDrnjUNBg')",
+  );
   importFp()
-    .then((Fingerprint: any) => Fingerprint.start({ region: 'ap' }))
+    .then((Fingerprint: any) => Fingerprint.start({ region: "ap" }))
     .then((fp: any) => fp.get(getOptions))
     .then((result: any) => {
       fpData = result;
       fpLoading = false;
       fpError = null;
 
-      fpLoadingEl.classList.add('hidden');
-      fpSuccessEl.classList.remove('hidden');
-      fpCopyBtn.classList.remove('hidden');
+      fpLoadingEl.classList.add("hidden");
+      fpSuccessEl.classList.remove("hidden");
+      fpCopyBtn.classList.remove("hidden");
 
       fpVisitorIdText.textContent = result.visitor_id;
       if (result.confidence?.score !== undefined) {
         fpConfidenceText.textContent = `${Math.round(result.confidence.score * 100)}%`;
       } else {
-        fpConfidenceText.textContent = 'High';
+        fpConfidenceText.textContent = "High";
       }
 
       // Display the sent metadata / tags in our tagging visualizer panel
-      const tagsContainer = document.getElementById('fp-tags-display-container');
-      const tagTimestamp = document.getElementById('fp-tag-timestamp');
-      const tagLinkedId = document.getElementById('fp-tag-linked-id');
-      const tagName = document.getElementById('fp-tag-name');
-      const tagDept = document.getElementById('fp-tag-dept');
-      const tagDesig = document.getElementById('fp-tag-desig');
-      const tagAction = document.getElementById('fp-tag-action');
-      const tagStatus = document.getElementById('fp-tag-status');
+      const tagsContainer = document.getElementById(
+        "fp-tags-display-container",
+      );
+      const tagTimestamp = document.getElementById("fp-tag-timestamp");
+      const tagLinkedId = document.getElementById("fp-tag-linked-id");
+      const tagName = document.getElementById("fp-tag-name");
+      const tagDept = document.getElementById("fp-tag-dept");
+      const tagDesig = document.getElementById("fp-tag-desig");
+      const tagAction = document.getElementById("fp-tag-action");
+      const tagStatus = document.getElementById("fp-tag-status");
 
       if (tagsContainer && currentTag) {
-        tagsContainer.classList.remove('hidden');
+        tagsContainer.classList.remove("hidden");
         if (tagTimestamp) tagTimestamp.textContent = currentTag.timestamp;
-        if (tagLinkedId) tagLinkedId.textContent = getOptions.linkedId || 'Anonymous';
-        if (tagName) tagName.textContent = currentTag.name || 'Anonymous Visitor';
-        if (tagDept) tagDept.textContent = currentTag.department || 'N/A';
-        if (tagDesig) tagDesig.textContent = currentTag.designation || 'N/A';
+        if (tagLinkedId)
+          tagLinkedId.textContent = getOptions.linkedId || "Anonymous";
+        if (tagName)
+          tagName.textContent = currentTag.name || "Anonymous Visitor";
+        if (tagDept) tagDept.textContent = currentTag.department || "N/A";
+        if (tagDesig) tagDesig.textContent = currentTag.designation || "N/A";
         if (tagAction) tagAction.textContent = currentTag.action;
         if (tagStatus) {
           tagStatus.textContent = currentTag.status;
-          if (currentTag.status === 'Success' || currentTag.status === 'Verified' || currentTag.status === 'Active' || currentTag.status === 'Present') {
-            tagStatus.className = 'text-emerald-400 font-semibold';
+          if (
+            currentTag.status === "Success" ||
+            currentTag.status === "Verified" ||
+            currentTag.status === "Active" ||
+            currentTag.status === "Present"
+          ) {
+            tagStatus.className = "text-emerald-400 font-semibold";
           } else {
-            tagStatus.className = 'text-amber-400 font-semibold';
+            tagStatus.className = "text-amber-400 font-semibold";
           }
         }
       }
 
-      console.log("Fingerprint JS Agent Identified with Tagging. Visitor ID:", result.visitor_id, "Tags:", getOptions.tag);
-      addLiveLog('device_connected', `[FINGERPRINT] Identified client device and sent tags. Visitor ID: ${result.visitor_id}`);
+      console.log(
+        "Fingerprint JS Agent Identified with Tagging. Visitor ID:",
+        result.visitor_id,
+        "Tags:",
+        getOptions.tag,
+      );
+      addLiveLog(
+        "device_connected",
+        `[FINGERPRINT] Identified client device and sent tags. Visitor ID: ${result.visitor_id}`,
+      );
     })
     .catch((err: any) => {
       fpLoading = false;
       fpError = err;
 
-      fpLoadingEl.classList.add('hidden');
-      fpErrorEl.classList.remove('hidden');
+      fpLoadingEl.classList.add("hidden");
+      fpErrorEl.classList.remove("hidden");
       fpErrorEl.innerHTML = `⚠️ Fingerprint Blocked: ${err.message || String(err)}. Please disable ad-blockers.`;
 
-      addLiveLog('scan_failed', `[FINGERPRINT] Device intelligence initialization failed. Ad-blocker may be active.`);
+      addLiveLog(
+        "scan_failed",
+        `[FINGERPRINT] Device intelligence initialization failed. Ad-blocker may be active.`,
+      );
     });
 }
 
 // DB & HARDWARE STATUS SYNC
 function updateDatabaseStatus(isConnected: boolean) {
-  const dot = document.getElementById('db-status-dot');
-  const text = document.getElementById('db-status-text');
+  const dot = document.getElementById("db-status-dot");
+  const text = document.getElementById("db-status-text");
   if (dot && text) {
     if (isConnected) {
       dot.innerHTML = `
@@ -256,27 +294,34 @@ function updateDatabaseStatus(isConnected: boolean) {
   }
 }
 
-async function checkLocalSecuGen(): Promise<{ online: boolean; deviceConnected: boolean; error?: string }> {
-  const customUrl = loadFromLocalStorage('secugen_api_url', 'https://localhost:8443/SGIFPCapture');
-  
+async function checkLocalSecuGen(): Promise<{
+  online: boolean;
+  deviceConnected: boolean;
+  error?: string;
+}> {
+  const customUrl = loadFromLocalStorage(
+    "secugen_api_url",
+    "https://localhost:8443/SGIFPCapture",
+  );
+
   const rawUrls = [];
   if (activeSecuGenUrl) {
     rawUrls.push(activeSecuGenUrl);
   }
   rawUrls.push(
     customUrl,
-    customUrl.replace('SGIFPCapture', 'SGIFPM_Capture'),
-    customUrl.replace('SGIFPM_Capture', 'SGIFPCapture'),
-    'https://localhost:8443/SGIFPCapture',
-    'https://127.0.0.1:8443/SGIFPCapture',
-    'http://localhost:8000/SGIFPCapture',
-    'http://127.0.0.1:8000/SGIFPCapture',
-    'https://localhost:8443/SGIFPM_Capture',
-    'https://127.0.0.1:8443/SGIFPM_Capture',
-    'http://localhost:8000/SGIFPM_Capture',
-    'http://127.0.0.1:8000/SGIFPM_Capture'
+    customUrl.replace("SGIFPCapture", "SGIFPM_Capture"),
+    customUrl.replace("SGIFPM_Capture", "SGIFPCapture"),
+    "https://localhost:8443/SGIFPCapture",
+    "https://127.0.0.1:8443/SGIFPCapture",
+    "http://localhost:8000/SGIFPCapture",
+    "http://127.0.0.1:8000/SGIFPCapture",
+    "https://localhost:8443/SGIFPM_Capture",
+    "https://127.0.0.1:8443/SGIFPM_Capture",
+    "http://localhost:8000/SGIFPM_Capture",
+    "http://127.0.0.1:8000/SGIFPM_Capture",
   );
-  
+
   const urls = Array.from(new Set(rawUrls)).filter(Boolean);
 
   for (const url of urls) {
@@ -287,9 +332,9 @@ async function checkLocalSecuGen(): Promise<{ online: boolean; deviceConnected: 
       const id = setTimeout(() => controller.abort(), 1000);
 
       const res = await fetch(fetchUrl, {
-        method: 'GET',
-        headers: { 'Accept': 'application/json' },
-        signal: controller.signal
+        method: "GET",
+        headers: { Accept: "application/json" },
+        signal: controller.signal,
       });
       clearTimeout(id);
 
@@ -297,16 +342,20 @@ async function checkLocalSecuGen(): Promise<{ online: boolean; deviceConnected: 
         const data = await res.json();
         activeSecuGenUrl = url; // Cache the working URL!
         const errorCode = data.ErrorCode;
-        
+
         // Error codes:
         // 0: Success (fingerprint captured, device connected)
         // 1: Timeout (sensor active but no finger placed, device is plugged in!)
         // 103: Device Open Failed (unplugged or driver locked)
         // 105: No Device (unplugged)
         if (errorCode === 103 || errorCode === 105 || errorCode === 100) {
-          return { online: true, deviceConnected: false, error: data.ErrorDescription || "Sensor unplugged" };
+          return {
+            online: true,
+            deviceConnected: false,
+            error: data.ErrorDescription || "Sensor unplugged",
+          };
         }
-        
+
         return { online: true, deviceConnected: true };
       }
     } catch (err) {
@@ -321,17 +370,17 @@ async function checkLocalSecuGen(): Promise<{ online: boolean; deviceConnected: 
 
 async function performScannerStatusCheck() {
   const result = await checkLocalSecuGen();
-  
-  const pill = document.getElementById('hw-status-pill');
-  const pillDot = document.getElementById('hw-status-dot');
-  const pillText = document.getElementById('hw-status-text');
 
-  const widgetDot = document.getElementById('physical-scanner-status-dot');
-  const widgetText = document.getElementById('physical-scanner-status-text');
+  const pill = document.getElementById("hw-status-pill");
+  const pillDot = document.getElementById("hw-status-dot");
+  const pillText = document.getElementById("hw-status-text");
+
+  const widgetDot = document.getElementById("physical-scanner-status-dot");
+  const widgetText = document.getElementById("physical-scanner-status-text");
 
   if (result.online && result.deviceConnected) {
     isScannerUsbPlugged = true;
-    
+
     // Update top status pill
     if (pillDot) {
       pillDot.className = "relative flex h-2 w-2";
@@ -352,7 +401,6 @@ async function performScannerStatusCheck() {
     if (widgetText) {
       widgetText.innerHTML = `SecuGen HU20: <strong class="text-emerald-400">Ready & Connected</strong>`;
     }
-
   } else if (result.online && !result.deviceConnected) {
     isScannerUsbPlugged = false;
 
@@ -402,7 +450,7 @@ async function performScannerStatusCheck() {
 
 async function fetchUsers() {
   try {
-    const res = await fetch('/api/users');
+    const res = await fetch("/api/users");
     if (res.ok) {
       updateDatabaseStatus(true);
       const dbUsers = await res.json();
@@ -430,7 +478,7 @@ function startPolling() {
     performScannerStatusCheck();
 
     try {
-      const res = await fetch('/api/users');
+      const res = await fetch("/api/users");
       if (!res.ok) {
         updateDatabaseStatus(false);
         return;
@@ -440,21 +488,31 @@ function startPolling() {
       if (!dbUsers || dbUsers.length === 0) return;
 
       let hasChanges = false;
-      dbUsers.forEach(dbUser => {
-        const localUserIndex = users.findIndex(u => u.id === dbUser.id);
+      dbUsers.forEach((dbUser) => {
+        const localUserIndex = users.findIndex((u) => u.id === dbUser.id);
         if (localUserIndex > -1) {
           const localUser = users[localUserIndex];
 
-          const fingersLengthChanged = (localUser.fingers?.length || 0) !== (dbUser.fingers?.length || 0);
+          const fingersLengthChanged =
+            (localUser.fingers?.length || 0) !== (dbUser.fingers?.length || 0);
 
           // If database status, fingerprintId, or fingers array changed
-          if (localUser.status !== dbUser.status || localUser.fingerprintId !== dbUser.fingerprintId || fingersLengthChanged) {
+          if (
+            localUser.status !== dbUser.status ||
+            localUser.fingerprintId !== dbUser.fingerprintId ||
+            fingersLengthChanged
+          ) {
             hasChanges = true;
 
             // Trigger punch attendance record if transitioned to Present/Late
-            if ((dbUser.status === 'Present' || dbUser.status === 'Late') && localUser.status === 'Absent') {
-              const todayStr = new Date().toISOString().split('T')[0];
-              const alreadyRecorded = attendance.some(rec => rec.userId === dbUser.id && rec.date === todayStr);
+            if (
+              (dbUser.status === "Present" || dbUser.status === "Late") &&
+              localUser.status === "Absent"
+            ) {
+              const todayStr = new Date().toISOString().split("T")[0];
+              const alreadyRecorded = attendance.some(
+                (rec) => rec.userId === dbUser.id && rec.date === todayStr,
+              );
 
               if (!alreadyRecorded) {
                 const newRecord: AttendanceRecord = {
@@ -464,12 +522,16 @@ function startPolling() {
                   userDepartment: dbUser.department,
                   date: todayStr,
                   checkIn: getFormattedTime(),
-                  status: dbUser.status as 'Present' | 'Late',
-                  method: 'Fingerprint'
+                  status: dbUser.status as "Present" | "Late",
+                  method: "Fingerprint",
                 };
                 attendance = [newRecord, ...attendance];
-                saveToLocalStorage('bio_attendance', attendance);
-                addLiveLog('scan_success', `Hardware Punch: Welcome ${dbUser.name}! Scanned successfully.`, dbUser.id);
+                saveToLocalStorage("bio_attendance", attendance);
+                addLiveLog(
+                  "scan_success",
+                  `Hardware Punch: Welcome ${dbUser.name}! Scanned successfully.`,
+                  dbUser.id,
+                );
               }
             }
 
@@ -477,7 +539,7 @@ function startPolling() {
               ...localUser,
               status: dbUser.status,
               fingerprintId: dbUser.fingerprintId,
-              fingers: dbUser.fingers || []
+              fingers: dbUser.fingers || [],
             };
           }
         }
@@ -496,13 +558,18 @@ function startPolling() {
 }
 
 // ATTENDANCE RECORDING HANDLERS
-function recordPunch(userId: string, fingerName?: string): { status: string; isClockOut: boolean } | null {
-  const matchedUser = users.find(u => u.id === userId);
+function recordPunch(
+  userId: string,
+  fingerName?: string,
+): { status: string; isClockOut: boolean } | null {
+  const matchedUser = users.find((u) => u.id === userId);
   if (!matchedUser) return null;
 
-  const todayStr = new Date().toISOString().split('T')[0];
-  const existingRecordIndex = attendance.findIndex(r => r.userId === userId && r.date === todayStr);
-  const fingerLabel = fingerName ? ` via ${fingerName}` : '';
+  const todayStr = new Date().toISOString().split("T")[0];
+  const existingRecordIndex = attendance.findIndex(
+    (r) => r.userId === userId && r.date === todayStr,
+  );
+  const fingerLabel = fingerName ? ` via ${fingerName}` : "";
 
   if (existingRecordIndex > -1) {
     const record = attendance[existingRecordIndex];
@@ -510,15 +577,23 @@ function recordPunch(userId: string, fingerName?: string): { status: string; isC
       // Clock Out
       attendance[existingRecordIndex] = {
         ...record,
-        checkOut: getFormattedTime()
+        checkOut: getFormattedTime(),
       };
-      saveToLocalStorage('bio_attendance', attendance);
-      addLiveLog('scan_success', `Clock-Out Verified: ${matchedUser.name} punched out${fingerLabel}.`, matchedUser.id);
+      saveToLocalStorage("bio_attendance", attendance);
+      addLiveLog(
+        "scan_success",
+        `Clock-Out Verified: ${matchedUser.name} punched out${fingerLabel}.`,
+        matchedUser.id,
+      );
       renderDashboard();
-      initFingerprint(userId, 'biometric_punch', 'Clock Out');
+      initFingerprint(userId, "biometric_punch", "Clock Out");
       return { status: record.status, isClockOut: true };
     } else {
-      addLiveLog('scan_failed', `Duplicate Scan Blocked: ${matchedUser.name} has already punched out today.`, matchedUser.id);
+      addLiveLog(
+        "scan_failed",
+        `Duplicate Scan Blocked: ${matchedUser.name} has already punched out today.`,
+        matchedUser.id,
+      );
       return { status: record.status, isClockOut: true };
     }
   }
@@ -528,7 +603,7 @@ function recordPunch(userId: string, fingerName?: string): { status: string; isC
   const cutoffTime = new Date();
   cutoffTime.setHours(9, 15, 0); // 9:15 AM check-in cut-off
   const isLate = now.getTime() > cutoffTime.getTime();
-  const status = isLate ? 'Late' : 'Present';
+  const status = isLate ? "Late" : "Present";
 
   const newRecord: AttendanceRecord = {
     id: `ATT-${Math.floor(1000 + Math.random() * 9000)}`,
@@ -538,31 +613,35 @@ function recordPunch(userId: string, fingerName?: string): { status: string; isC
     date: todayStr,
     checkIn: getFormattedTime(),
     status,
-    method: 'Fingerprint'
+    method: "Fingerprint",
   };
 
   attendance = [newRecord, ...attendance];
-  saveToLocalStorage('bio_attendance', attendance);
+  saveToLocalStorage("bio_attendance", attendance);
 
   // Update employee status back to server MySQL database
   updateUserStatusOnServer(userId, status);
 
-  addLiveLog('scan_success', `Punch Registered: ${matchedUser.name} identified${fingerLabel} as ${status}.`, matchedUser.id);
+  addLiveLog(
+    "scan_success",
+    `Punch Registered: ${matchedUser.name} identified${fingerLabel} as ${status}.`,
+    matchedUser.id,
+  );
   renderDashboard();
-  initFingerprint(userId, 'biometric_punch', status);
+  initFingerprint(userId, "biometric_punch", status);
   return { status, isClockOut: false };
 }
 
 async function updateUserStatusOnServer(userId: string, status: string) {
   try {
     const res = await fetch(`/api/users/${userId}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status })
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status }),
     });
     if (res.ok) {
       // update local cache as well
-      const uIndex = users.findIndex(u => u.id === userId);
+      const uIndex = users.findIndex((u) => u.id === userId);
       if (uIndex > -1) {
         users[uIndex].status = status as any;
         renderStats();
@@ -579,48 +658,52 @@ function switchTab(tabId: typeof activeTab) {
   activeTab = tabId;
 
   // Toggle active styling on navigation buttons
-  document.querySelectorAll('#sidebar-nav button').forEach(btn => {
+  document.querySelectorAll("#sidebar-nav button").forEach((btn) => {
     const dataset = (btn as HTMLElement).dataset;
     if (dataset.tab === tabId) {
-      btn.className = "nav-btn w-full flex items-center space-x-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all text-cyan-400 bg-slate-900/80 border border-slate-800 shadow-sm";
+      btn.className =
+        "nav-btn w-full flex items-center space-x-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all text-cyan-400 bg-slate-900/80 border border-slate-800 shadow-sm";
     } else {
-      btn.className = "nav-btn w-full flex items-center space-x-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all text-slate-400 hover:text-slate-100 hover:bg-slate-900/40";
+      btn.className =
+        "nav-btn w-full flex items-center space-x-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all text-slate-400 hover:text-slate-100 hover:bg-slate-900/40";
     }
   });
 
   // Toggle visible panels
-  document.querySelectorAll('.tab-panel').forEach(panel => {
+  document.querySelectorAll(".tab-panel").forEach((panel) => {
     if (panel.id === `tab-${tabId}`) {
-      panel.classList.remove('hidden');
+      panel.classList.remove("hidden");
     } else {
-      panel.classList.add('hidden');
+      panel.classList.add("hidden");
     }
   });
 
   // Trigger focus layouts if needed
-  if (tabId === 'dashboard') {
+  if (tabId === "dashboard") {
     renderDashboard();
-  } else if (tabId === 'users') {
+  } else if (tabId === "users") {
     renderUsers();
-  } else if (tabId === 'console') {
+  } else if (tabId === "console") {
     renderLogs();
   }
 }
 
 // RENDER: DASHBOARD STATS CARD
 function renderStats() {
-  const totalEl = document.getElementById('stat-total-employees');
-  const presentEl = document.getElementById('stat-present');
-  const lateEl = document.getElementById('stat-late');
-  const absentEl = document.getElementById('stat-absent');
+  const totalEl = document.getElementById("stat-total-employees");
+  const presentEl = document.getElementById("stat-present");
+  const lateEl = document.getElementById("stat-late");
+  const absentEl = document.getElementById("stat-absent");
 
   if (!totalEl || !presentEl || !lateEl || !absentEl) return;
 
-  const todayStr = new Date().toISOString().split('T')[0];
-  const todayRecords = attendance.filter(r => r.date === todayStr);
+  const todayStr = new Date().toISOString().split("T")[0];
+  const todayRecords = attendance.filter((r) => r.date === todayStr);
 
-  const presentCount = todayRecords.filter(r => r.status === 'Present').length;
-  const lateCount = todayRecords.filter(r => r.status === 'Late').length;
+  const presentCount = todayRecords.filter(
+    (r) => r.status === "Present",
+  ).length;
+  const lateCount = todayRecords.filter((r) => r.status === "Late").length;
   const absentCount = Math.max(0, users.length - (presentCount + lateCount));
 
   totalEl.textContent = String(users.length);
@@ -633,34 +716,41 @@ function renderStats() {
 function renderDashboard() {
   renderStats();
 
-  const tbody = document.getElementById('attendance-rows');
-  const emptyState = document.getElementById('attendance-empty-state');
+  const tbody = document.getElementById("attendance-rows");
+  const emptyState = document.getElementById("attendance-empty-state");
   if (!tbody || !emptyState) return;
 
-  tbody.innerHTML = '';
+  tbody.innerHTML = "";
 
-  const todayStr = new Date().toISOString().split('T')[0];
-  
+  const todayStr = new Date().toISOString().split("T")[0];
+
   // Filter today's records and department choice
-  const filteredRecords = attendance.filter(rec => {
+  const filteredRecords = attendance.filter((rec) => {
     if (rec.date !== todayStr) return false;
-    if (dashboardDeptFilter !== 'All' && rec.userDepartment !== dashboardDeptFilter) return false;
+    if (
+      dashboardDeptFilter !== "All" &&
+      rec.userDepartment !== dashboardDeptFilter
+    )
+      return false;
     return true;
   });
 
   if (filteredRecords.length === 0) {
-    emptyState.classList.remove('hidden');
+    emptyState.classList.remove("hidden");
     return;
   } else {
-    emptyState.classList.add('hidden');
+    emptyState.classList.add("hidden");
   }
 
-  filteredRecords.forEach(rec => {
-    const tr = document.createElement('tr');
-    tr.className = "hover:bg-slate-900/20 transition-all border-b border-slate-900/60";
+  filteredRecords.forEach((rec) => {
+    const tr = document.createElement("tr");
+    tr.className =
+      "hover:bg-slate-900/20 transition-all border-b border-slate-900/60";
 
-    const user = users.find(u => u.id === rec.userId);
-    const avatarUrl = user?.avatar || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=200";
+    const user = users.find((u) => u.id === rec.userId);
+    const avatarUrl =
+      user?.avatar ||
+      "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=200";
 
     tr.innerHTML = `
       <td class="py-3 px-4 flex items-center space-x-3">
@@ -673,13 +763,13 @@ function renderDashboard() {
       <td class="py-3 px-4 text-xs text-slate-300 font-medium">${rec.userDepartment}</td>
       <td class="py-3 px-4">
         <span class="px-2 py-0.5 rounded-full text-[10px] font-bold font-mono tracking-wide uppercase ${
-          rec.status === 'Present' 
-            ? 'bg-emerald-950/60 text-emerald-400 border border-emerald-800/60' 
-            : 'bg-amber-950/60 text-amber-400 border border-amber-800/60'
+          rec.status === "Present"
+            ? "bg-emerald-950/60 text-emerald-400 border border-emerald-800/60"
+            : "bg-amber-950/60 text-amber-400 border border-amber-800/60"
         }">${rec.status}</span>
       </td>
       <td class="py-3 px-4 text-xs font-mono text-slate-300">${rec.checkIn}</td>
-      <td class="py-3 px-4 text-xs font-mono text-slate-400">${rec.checkOut || '--:--:--'}</td>
+      <td class="py-3 px-4 text-xs font-mono text-slate-400">${rec.checkOut || "--:--:--"}</td>
       <td class="py-3 px-4 text-right text-[10px] font-mono font-bold text-slate-500">${rec.method}</td>
     `;
     tbody.appendChild(tr);
@@ -688,30 +778,38 @@ function renderDashboard() {
 
 // RENDER: WORKFORCE DATABASE CARDS
 function renderUsers() {
-  const grid = document.getElementById('employees-grid');
-  const emptyState = document.getElementById('employees-empty-state');
+  const grid = document.getElementById("employees-grid");
+  const emptyState = document.getElementById("employees-empty-state");
   if (!grid || !emptyState) return;
 
-  grid.innerHTML = '';
+  grid.innerHTML = "";
 
-  const filtered = users.filter(user => {
-    const matchesSearch = 
+  const filtered = users.filter((user) => {
+    const matchesSearch =
       user.name.toLowerCase().includes(userSearchQuery.toLowerCase()) ||
       user.id.toLowerCase().includes(userSearchQuery.toLowerCase()) ||
       user.designation.toLowerCase().includes(userSearchQuery.toLowerCase()) ||
-      (user.fingerprintId && user.fingerprintId.toLowerCase().includes(userSearchQuery.toLowerCase()));
+      (user.fingerprintId &&
+        user.fingerprintId
+          .toLowerCase()
+          .includes(userSearchQuery.toLowerCase()));
 
-    const matchesDept = userDeptFilter === 'All' || user.department === userDeptFilter;
+    const matchesDept =
+      userDeptFilter === "All" || user.department === userDeptFilter;
 
-    const todayStr = new Date().toISOString().split('T')[0];
-    const presentToday = attendance.some(r => r.userId === user.id && r.date === todayStr);
+    const todayStr = new Date().toISOString().split("T")[0];
+    const presentToday = attendance.some(
+      (r) => r.userId === user.id && r.date === todayStr,
+    );
 
     let matchesBio = true;
-    if (userBioFilter === 'Enrolled') {
-      matchesBio = (user.fingers && user.fingers.length > 0) || !!user.fingerprintId;
-    } else if (userBioFilter === 'NotEnrolled') {
-      matchesBio = (!user.fingers || user.fingers.length === 0) && !user.fingerprintId;
-    } else if (userBioFilter === 'Present') {
+    if (userBioFilter === "Enrolled") {
+      matchesBio =
+        (user.fingers && user.fingers.length > 0) || !!user.fingerprintId;
+    } else if (userBioFilter === "NotEnrolled") {
+      matchesBio =
+        (!user.fingers || user.fingers.length === 0) && !user.fingerprintId;
+    } else if (userBioFilter === "Present") {
       matchesBio = presentToday;
     }
 
@@ -719,33 +817,37 @@ function renderUsers() {
   });
 
   if (filtered.length === 0) {
-    emptyState.classList.remove('hidden');
+    emptyState.classList.remove("hidden");
     return;
   } else {
-    emptyState.classList.add('hidden');
+    emptyState.classList.add("hidden");
   }
 
-  filtered.forEach(user => {
-    const card = document.createElement('div');
-    card.className = "bg-slate-950/40 p-5 rounded-2xl border border-slate-900 hover:border-slate-800 transition-all hover:shadow-xl relative flex flex-col justify-between min-h-[310px]";
+  filtered.forEach((user) => {
+    const card = document.createElement("div");
+    card.className =
+      "bg-slate-950/40 p-5 rounded-2xl border border-slate-900 hover:border-slate-800 transition-all hover:shadow-xl relative flex flex-col justify-between min-h-[310px]";
 
-    const todayStr = new Date().toISOString().split('T')[0];
-    const loggedToday = attendance.find(r => r.userId === user.id && r.date === todayStr);
-    
-    let statusBadge = '';
+    const todayStr = new Date().toISOString().split("T")[0];
+    const loggedToday = attendance.find(
+      (r) => r.userId === user.id && r.date === todayStr,
+    );
+
+    let statusBadge = "";
     if (loggedToday) {
       statusBadge = `<span class="px-2 py-0.5 rounded-full text-[9px] font-extrabold uppercase font-mono bg-emerald-950/60 text-emerald-400 border border-emerald-800/60">Present</span>`;
     } else {
       statusBadge = `<span class="px-2 py-0.5 rounded-full text-[9px] font-extrabold uppercase font-mono bg-slate-900/60 text-slate-400 border border-slate-800">Absent</span>`;
     }
 
-    const numFingers = (user.fingers?.length || (user.fingerprintId ? 1 : 0));
-    const bioBadge = numFingers > 0 
-      ? `<span class="text-[9px] font-bold text-cyan-400 bg-cyan-950/60 border border-cyan-800/60 px-2 py-0.5 rounded-full flex items-center space-x-1">
+    const numFingers = user.fingers?.length || (user.fingerprintId ? 1 : 0);
+    const bioBadge =
+      numFingers > 0
+        ? `<span class="text-[9px] font-bold text-cyan-400 bg-cyan-950/60 border border-cyan-800/60 px-2 py-0.5 rounded-full flex items-center space-x-1">
           <i data-lucide="fingerprint" class="h-3 w-3"></i>
-          <span>${numFingers} FINGER${numFingers > 1 ? 'S' : ''}</span>
+          <span>${numFingers} FINGER${numFingers > 1 ? "S" : ""}</span>
          </span>`
-      : `<span class="text-[9px] font-bold text-rose-400 bg-rose-950/60 border border-rose-800/60 px-2 py-0.5 rounded-full flex items-center space-x-1 animate-pulse">
+        : `<span class="text-[9px] font-bold text-rose-400 bg-rose-950/60 border border-rose-800/60 px-2 py-0.5 rounded-full flex items-center space-x-1 animate-pulse">
           <i data-lucide="alert-triangle" class="h-3 w-3"></i>
           <span>PENDING</span>
          </span>`;
@@ -755,7 +857,7 @@ function renderUsers() {
       <div class="space-y-4">
         <div class="flex justify-between items-start">
           <div class="flex items-center space-x-3.5">
-            <img src="${user.avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=200'}" alt="${user.name}" class="h-12 w-12 rounded-full border border-slate-800 object-cover" />
+            <img src="${user.avatar || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=200"}" alt="${user.name}" class="h-12 w-12 rounded-full border border-slate-800 object-cover" />
             <div>
               <h4 class="text-sm font-bold text-white tracking-wide">${user.name}</h4>
               <p class="text-xs text-slate-400 font-mono mt-0.5">${user.id}</p>
@@ -780,17 +882,23 @@ function renderUsers() {
             <i data-lucide="phone" class="h-3.5 w-3.5 text-slate-500"></i>
             <span>${user.phone}</span>
           </div>
-          ${user.fingers && user.fingers.length > 0 ? `
+          ${
+            user.fingers && user.fingers.length > 0
+              ? `
             <div class="flex flex-wrap gap-1 pt-1.5 items-center">
               <span class="text-[9px] text-slate-500 font-sans font-bold uppercase tracking-wider mr-1">Registered:</span>
-              ${user.fingers.map(f => `<span class="bg-slate-900 text-slate-400 border border-slate-850 text-[9px] px-1.5 py-0.5 rounded-lg font-sans">${f.fingerName}</span>`).join('')}
+              ${user.fingers.map((f) => `<span class="bg-slate-900 text-slate-400 border border-slate-850 text-[9px] px-1.5 py-0.5 rounded-lg font-sans">${f.fingerName}</span>`).join("")}
             </div>
-          ` : (user.fingerprintId ? `
+          `
+              : user.fingerprintId
+                ? `
             <div class="flex flex-wrap gap-1 pt-1.5 items-center">
               <span class="text-[9px] text-slate-500 font-sans font-bold uppercase tracking-wider mr-1">Registered:</span>
               <span class="bg-slate-900 text-slate-400 border border-slate-850 text-[9px] px-1.5 py-0.5 rounded-lg font-sans text-xs">Right Index (Legacy)</span>
             </div>
-          ` : '')}
+          `
+                : ""
+          }
         </div>
       </div>
 
@@ -798,7 +906,7 @@ function renderUsers() {
       <div class="pt-4 border-t border-slate-900/60 flex items-center justify-between gap-2 mt-4">
         <button onclick="window.enrollFingerprint('${user.id}')" class="flex-1 flex items-center justify-center space-x-1.5 py-1.5 bg-slate-900 hover:bg-slate-850 border border-slate-800 text-slate-200 hover:text-white rounded-xl text-xs font-bold transition-all cursor-pointer active:scale-95">
           <i data-lucide="fingerprint" class="h-3.5 w-3.5 text-cyan-400"></i>
-          <span>${numFingers > 0 ? 'Manage Fingers' : 'Enroll Finger'}</span>
+          <span>${numFingers > 0 ? "Manage Fingers" : "Enroll Finger"}</span>
         </button>
         
         <button onclick="window.editEmployee('${user.id}')" class="p-2 bg-slate-900 hover:bg-slate-850 border border-slate-800 text-slate-400 hover:text-slate-200 rounded-xl transition-all cursor-pointer" title="Edit Profile">
@@ -820,24 +928,24 @@ function renderUsers() {
 
 // RENDER: HARDWARE TERMINAL LOGS
 function renderLogs() {
-  const miniLogs = document.getElementById('mini-console-logs');
-  const fullTerminal = document.getElementById('full-console-terminal');
+  const miniLogs = document.getElementById("mini-console-logs");
+  const fullTerminal = document.getElementById("full-console-terminal");
 
   const createLogHTML = (log: LiveLog) => {
-    let colorClass = 'text-slate-300';
-    let icon = '●';
-    if (log.type === 'scan_success') {
-      colorClass = 'text-emerald-400';
-      icon = '✓';
-    } else if (log.type === 'scan_failed') {
-      colorClass = 'text-rose-400';
-      icon = '⚠️';
-    } else if (log.type === 'enroll_start' || log.type === 'enroll_success') {
-      colorClass = 'text-cyan-400';
-      icon = '⚓';
-    } else if (log.type === 'device_connected') {
-      colorClass = 'text-blue-400';
-      icon = '🔌';
+    let colorClass = "text-slate-300";
+    let icon = "●";
+    if (log.type === "scan_success") {
+      colorClass = "text-emerald-400";
+      icon = "✓";
+    } else if (log.type === "scan_failed") {
+      colorClass = "text-rose-400";
+      icon = "⚠️";
+    } else if (log.type === "enroll_start" || log.type === "enroll_success") {
+      colorClass = "text-cyan-400";
+      icon = "⚓";
+    } else if (log.type === "device_connected") {
+      colorClass = "text-blue-400";
+      icon = "🔌";
     }
 
     return `
@@ -846,7 +954,7 @@ function renderLogs() {
         <span class="${colorClass} font-bold select-none">${icon}</span>
         <div class="flex-1">
           <span class="${colorClass}">${log.message}</span>
-          ${log.userId && log.userId !== 'SYSTEM' ? `<span class="text-[10px] text-slate-600 block mt-0.5">User ID: ${log.userId} (${log.userName})</span>` : ''}
+          ${log.userId && log.userId !== "SYSTEM" ? `<span class="text-[10px] text-slate-600 block mt-0.5">User ID: ${log.userId} (${log.userName})</span>` : ""}
         </div>
       </div>
     `;
@@ -857,7 +965,7 @@ function renderLogs() {
     if (logs.length === 0) {
       miniLogs.innerHTML = `<p class="text-slate-500 italic text-center py-10">Standby - awaiting activity feeds.</p>`;
     } else {
-      miniLogs.innerHTML = logs.slice(0, 15).map(createLogHTML).join('');
+      miniLogs.innerHTML = logs.slice(0, 15).map(createLogHTML).join("");
     }
   }
 
@@ -866,32 +974,34 @@ function renderLogs() {
     if (logs.length === 0) {
       fullTerminal.innerHTML = `<p class="text-slate-500 italic text-center py-20">Standby - terminal is empty. Scanner daemon listening...</p>`;
     } else {
-      fullTerminal.innerHTML = logs.map(createLogHTML).join('');
+      fullTerminal.innerHTML = logs.map(createLogHTML).join("");
     }
   }
 }
 
 // POPULATE SELECT DROPDOWN FOR HARDWARE SIMULATOR
 function populateSimulatorDropdown() {
-  const dropdown = document.getElementById('simulator-user-select') as HTMLSelectElement;
+  const dropdown = document.getElementById(
+    "simulator-user-select",
+  ) as HTMLSelectElement;
   if (!dropdown) return;
 
-  dropdown.innerHTML = '';
+  dropdown.innerHTML = "";
 
   const options: { value: string; label: string }[] = [];
 
-  users.forEach(user => {
+  users.forEach((user) => {
     if (user.fingers && user.fingers.length > 0) {
-      user.fingers.forEach(f => {
+      user.fingers.forEach((f) => {
         options.push({
           value: `${user.id}:${f.fingerName}`,
-          label: `${user.name} (${user.id}) - ${f.fingerName}`
+          label: `${user.name} (${user.id}) - ${f.fingerName}`,
         });
       });
     } else if (user.fingerprintId) {
       options.push({
         value: `${user.id}:Right Index`,
-        label: `${user.name} (${user.id}) - Right Index (Legacy)`
+        label: `${user.name} (${user.id}) - Right Index (Legacy)`,
       });
     }
   });
@@ -901,8 +1011,8 @@ function populateSimulatorDropdown() {
     return;
   }
 
-  options.forEach(optData => {
-    const opt = document.createElement('option');
+  options.forEach((optData) => {
+    const opt = document.createElement("option");
     opt.value = optData.value;
     opt.textContent = optData.label;
     dropdown.appendChild(opt);
@@ -911,12 +1021,15 @@ function populateSimulatorDropdown() {
 
 // POPULATE SELECT DROPDOWN FOR FINGERPRINT TAGGING
 function populateFpTagDropdown() {
-  const dropdown = document.getElementById('fp-tag-user-select') as HTMLSelectElement;
+  const dropdown = document.getElementById(
+    "fp-tag-user-select",
+  ) as HTMLSelectElement;
   if (!dropdown) return;
 
-  dropdown.innerHTML = '<option value="">-- No User Linked (Anonymous) --</option>';
-  users.forEach(user => {
-    const opt = document.createElement('option');
+  dropdown.innerHTML =
+    '<option value="">-- No User Linked (Anonymous) --</option>';
+  users.forEach((user) => {
+    const opt = document.createElement("option");
     opt.value = user.id;
     opt.textContent = `${user.name} (${user.id})`;
     dropdown.appendChild(opt);
@@ -925,22 +1038,30 @@ function populateFpTagDropdown() {
 
 // ADD/EDIT EMPLOYEE MODAL MANAGEMENT
 function openRegisterModal(userToEdit?: User) {
-  const modal = document.getElementById('register-employee-modal');
-  const form = document.getElementById('register-employee-form') as HTMLFormElement;
-  const titleText = document.getElementById('modal-title-text');
+  const modal = document.getElementById("register-employee-modal");
+  const form = document.getElementById(
+    "register-employee-form",
+  ) as HTMLFormElement;
+  const titleText = document.getElementById("modal-title-text");
 
   if (!modal || !form || !titleText) return;
 
   form.reset();
 
-  const formEditId = document.getElementById('form-edit-id') as HTMLInputElement;
-  const formId = document.getElementById('form-id') as HTMLInputElement;
-  const formName = document.getElementById('form-name') as HTMLInputElement;
-  const formDepartment = document.getElementById('form-department') as HTMLSelectElement;
-  const formDesignation = document.getElementById('form-designation') as HTMLInputElement;
-  const formEmail = document.getElementById('form-email') as HTMLInputElement;
-  const formPhone = document.getElementById('form-phone') as HTMLInputElement;
-  const formAvatar = document.getElementById('form-avatar') as HTMLInputElement;
+  const formEditId = document.getElementById(
+    "form-edit-id",
+  ) as HTMLInputElement;
+  const formId = document.getElementById("form-id") as HTMLInputElement;
+  const formName = document.getElementById("form-name") as HTMLInputElement;
+  const formDepartment = document.getElementById(
+    "form-department",
+  ) as HTMLSelectElement;
+  const formDesignation = document.getElementById(
+    "form-designation",
+  ) as HTMLInputElement;
+  const formEmail = document.getElementById("form-email") as HTMLInputElement;
+  const formPhone = document.getElementById("form-phone") as HTMLInputElement;
+  const formAvatar = document.getElementById("form-avatar") as HTMLInputElement;
 
   if (userToEdit) {
     // Edit Mode
@@ -954,39 +1075,40 @@ function openRegisterModal(userToEdit?: User) {
     formDesignation.value = userToEdit.designation;
     formEmail.value = userToEdit.email;
     formPhone.value = userToEdit.phone;
-    formAvatar.value = userToEdit.avatar || '';
+    formAvatar.value = userToEdit.avatar || "";
   } else {
     // Register Mode
     titleText.textContent = "Register New Employee";
-    formEditId.value = '';
+    formEditId.value = "";
     formId.value = `EMP-${Math.floor(100 + Math.random() * 900)}`;
     formId.disabled = false;
   }
 
-  modal.classList.remove('hidden');
+  modal.classList.remove("hidden");
 }
 
 function closeRegisterModal() {
-  const modal = document.getElementById('register-employee-modal');
-  if (modal) modal.classList.add('hidden');
+  const modal = document.getElementById("register-employee-modal");
+  if (modal) modal.classList.add("hidden");
 }
 
 // BIOMETRIC ENROLLMENT WORKFLOW HANDLERS
 function renderEnrolledFingers(user: User) {
-  const container = document.getElementById('enrolled-fingers-list');
+  const container = document.getElementById("enrolled-fingers-list");
   if (!container) return;
 
-  container.innerHTML = '';
-  
+  container.innerHTML = "";
+
   const fingers = user.fingers || [];
   if (fingers.length === 0) {
     container.innerHTML = `<span class="text-xs text-slate-500 italic">কোনো আঙ্গুল নিবন্ধিত নেই (No fingers enrolled)</span>`;
     return;
   }
 
-  fingers.forEach(f => {
-    const badge = document.createElement('div');
-    badge.className = "inline-flex items-center space-x-1 px-2 py-0.5 bg-cyan-950/40 text-cyan-400 border border-cyan-800/40 rounded-lg text-[10px] font-sans font-medium";
+  fingers.forEach((f) => {
+    const badge = document.createElement("div");
+    badge.className =
+      "inline-flex items-center space-x-1 px-2 py-0.5 bg-cyan-950/40 text-cyan-400 border border-cyan-800/40 rounded-lg text-[10px] font-sans font-medium";
     badge.innerHTML = `
       <span>${f.fingerName}</span>
       <button class="delete-finger-btn hover:text-rose-400 transition-colors p-0.5 cursor-pointer" data-finger="${f.fingerName}" title="ডিলিট করুন">
@@ -997,24 +1119,40 @@ function renderEnrolledFingers(user: User) {
   });
 
   // Attach delete event listeners
-  container.querySelectorAll('.delete-finger-btn').forEach(btn => {
-    btn.addEventListener('click', async (e) => {
+  container.querySelectorAll(".delete-finger-btn").forEach((btn) => {
+    btn.addEventListener("click", async (e) => {
       e.stopPropagation();
       const fingerName = (e.currentTarget as HTMLElement).dataset.finger;
       if (!fingerName) return;
 
       if (confirm(`আপনি কি '${fingerName}' ফিঙ্গারপ্রিন্টটি মুছে ফেলতে চান?`)) {
         try {
-          const res = await fetch(`/api/users/${user.id}/fingers/${encodeURIComponent(fingerName)}`, {
-            method: 'DELETE'
-          });
+          const res = await fetch(
+            `/api/users/${user.id}/fingers/${encodeURIComponent(fingerName)}`,
+            {
+              method: "DELETE",
+            },
+          );
           if (res.ok) {
             // Update local state
-            user.fingers = (user.fingers || []).filter(item => item.fingerName !== fingerName);
-            if (user.fingerprintId && (user.fingers.length === 0 || !user.fingers.some(item => item.templateData === user.fingerprintId))) {
-              user.fingerprintId = user.fingers.length > 0 ? user.fingers[0].templateData : null;
+            user.fingers = (user.fingers || []).filter(
+              (item) => item.fingerName !== fingerName,
+            );
+            if (
+              user.fingerprintId &&
+              (user.fingers.length === 0 ||
+                !user.fingers.some(
+                  (item) => item.templateData === user.fingerprintId,
+                ))
+            ) {
+              user.fingerprintId =
+                user.fingers.length > 0 ? user.fingers[0].templateData : null;
             }
-            addLiveLog('scan_failed', `Biometric Terminated: Deleted '${fingerName}' fingerprint for ${user.name}.`, user.id);
+            addLiveLog(
+              "scan_failed",
+              `Biometric Terminated: Deleted '${fingerName}' fingerprint for ${user.name}.`,
+              user.id,
+            );
             renderEnrolledFingers(user);
             renderUsers();
             populateSimulatorDropdown();
@@ -1038,8 +1176,8 @@ async function runEnrollmentAutoScanLoop() {
   try {
     while (enrollUser && enrollStep < enrollMaxSteps) {
       // Check if the modal is currently open and not hidden
-      const modal = document.getElementById('enroll-modal');
-      if (!modal || modal.classList.contains('hidden')) {
+      const modal = document.getElementById("enroll-modal");
+      if (!modal || modal.classList.contains("hidden")) {
         break;
       }
 
@@ -1052,7 +1190,7 @@ async function runEnrollmentAutoScanLoop() {
       // Wait a short moment to allow the user to lift and place their finger again (if successful)
       // or a slight delay to avoid hammer-querying if the local API has an error
       const delayMs = success ? 2200 : 1500;
-      await new Promise(resolve => setTimeout(resolve, delayMs));
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
     }
   } catch (err) {
     console.error("Error in enrollment auto-scan loop:", err);
@@ -1061,9 +1199,9 @@ async function runEnrollmentAutoScanLoop() {
   }
 }
 
-window.enrollFingerprint = function(userId: string) {
-  const modal = document.getElementById('enroll-modal');
-  const user = users.find(u => u.id === userId);
+window.enrollFingerprint = function (userId: string) {
+  const modal = document.getElementById("enroll-modal");
+  const user = users.find((u) => u.id === userId);
 
   if (!modal || !user) return;
 
@@ -1072,30 +1210,49 @@ window.enrollFingerprint = function(userId: string) {
   enrollScanBuffer = [];
   lastCapturedData = null; // reset any previous session captured data
 
-  const avatar = document.getElementById('enroll-user-avatar') as HTMLImageElement;
-  const nameText = document.getElementById('enroll-user-name');
-  const idText = document.getElementById('enroll-user-id');
-  const scannerIcon = document.getElementById('enroll-scanner-icon');
-  const instruction = document.getElementById('enroll-instruction');
-  const statusDetail = document.getElementById('enroll-status-detail');
-  const saveBtn = document.getElementById('btn-save-enroll') as HTMLButtonElement;
+  const avatar = document.getElementById(
+    "enroll-user-avatar",
+  ) as HTMLImageElement;
+  const nameText = document.getElementById("enroll-user-name");
+  const idText = document.getElementById("enroll-user-id");
+  const scannerIcon = document.getElementById("enroll-scanner-icon");
+  const instruction = document.getElementById("enroll-instruction");
+  const statusDetail = document.getElementById("enroll-status-detail");
+  const saveBtn = document.getElementById(
+    "btn-save-enroll",
+  ) as HTMLButtonElement;
 
-  if (avatar && nameText && idText && scannerIcon && instruction && statusDetail && saveBtn) {
-    avatar.src = user.avatar || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=200";
+  if (
+    avatar &&
+    nameText &&
+    idText &&
+    scannerIcon &&
+    instruction &&
+    statusDetail &&
+    saveBtn
+  ) {
+    avatar.src =
+      user.avatar ||
+      "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=200";
     nameText.textContent = user.name;
     idText.textContent = `${user.id} • ${user.department}`;
-    
+
     // Reset scanner visuals
-    scannerIcon.setAttribute('class', "h-14 w-14 text-slate-700 group-hover:text-slate-500 transition-all");
+    scannerIcon.setAttribute(
+      "class",
+      "h-14 w-14 text-slate-700 group-hover:text-slate-500 transition-all",
+    );
     instruction.textContent = "Place your finger on the scanner above to scan.";
-    statusDetail.textContent = "Fingerprint scan will start automatically. Keep your finger on the scanner.";
-    
+    statusDetail.textContent =
+      "Fingerprint scan will start automatically. Keep your finger on the scanner.";
+
     // Disable save until completed (will auto-save)
     saveBtn.disabled = true;
-    saveBtn.className = "text-xs font-bold bg-cyan-500/20 text-slate-500 px-5 py-2.5 rounded-xl cursor-not-allowed transition-all font-display uppercase tracking-wider";
+    saveBtn.className =
+      "text-xs font-bold bg-cyan-500/20 text-slate-500 px-5 py-2.5 rounded-xl cursor-not-allowed transition-all font-display uppercase tracking-wider";
 
     // Reset progress dots (single dot for one-step enrollment)
-    const dotsContainer = document.getElementById('enroll-progress-dots');
+    const dotsContainer = document.getElementById("enroll-progress-dots");
     if (dotsContainer) {
       dotsContainer.innerHTML = `
         <span class="h-2.5 w-2.5 rounded-full bg-slate-800 transition-all"></span>
@@ -1106,8 +1263,12 @@ window.enrollFingerprint = function(userId: string) {
     renderEnrolledFingers(user);
   }
 
-  modal.classList.remove('hidden');
-  addLiveLog('enroll_start', `Started biometric fingerprint enrollment sequence for ${user.name}.`, user.id);
+  modal.classList.remove("hidden");
+  addLiveLog(
+    "enroll_start",
+    `Started biometric fingerprint enrollment sequence for ${user.name}.`,
+    user.id,
+  );
   lucide.createIcons();
 
   // Initiate the automatic scanner capture loop
@@ -1118,23 +1279,26 @@ window.enrollFingerprint = function(userId: string) {
 
 // PHYSICAL HARDWARE SECUGEN INTEGRATION LOGIC
 async function capturePhysicalFingerprint(timeoutMs = 15000): Promise<any> {
-  const customUrl = loadFromLocalStorage('secugen_api_url', 'https://localhost:8443/SGIFPCapture');
+  const customUrl = loadFromLocalStorage(
+    "secugen_api_url",
+    "https://localhost:8443/SGIFPCapture",
+  );
   const rawUrls = [];
   if (activeSecuGenUrl) {
     rawUrls.push(activeSecuGenUrl);
   }
   rawUrls.push(
     customUrl,
-    customUrl.replace('SGIFPCapture', 'SGIFPM_Capture'),
-    customUrl.replace('SGIFPM_Capture', 'SGIFPCapture'),
-    'https://localhost:8443/SGIFPCapture',
-    'http://localhost:8000/SGIFPCapture',
-    'https://127.0.0.1:8443/SGIFPCapture',
-    'http://127.0.0.1:8000/SGIFPCapture',
-    'https://localhost:8443/SGIFPM_Capture',
-    'http://localhost:8000/SGIFPM_Capture',
-    'https://127.0.0.1:8443/SGIFPM_Capture',
-    'http://127.0.0.1:8000/SGIFPM_Capture'
+    customUrl.replace("SGIFPCapture", "SGIFPM_Capture"),
+    customUrl.replace("SGIFPM_Capture", "SGIFPCapture"),
+    "https://localhost:8443/SGIFPCapture",
+    "http://localhost:8000/SGIFPCapture",
+    "https://127.0.0.1:8443/SGIFPCapture",
+    "http://127.0.0.1:8000/SGIFPCapture",
+    "https://localhost:8443/SGIFPM_Capture",
+    "http://localhost:8000/SGIFPM_Capture",
+    "https://127.0.0.1:8443/SGIFPM_Capture",
+    "http://127.0.0.1:8000/SGIFPM_Capture",
   );
 
   const urls = Array.from(new Set(rawUrls)).filter(Boolean);
@@ -1145,17 +1309,17 @@ async function capturePhysicalFingerprint(timeoutMs = 15000): Promise<any> {
       console.log(`Attempting physical capture on: ${url}`);
       // Query parameters for quality, timeout, and format
       const fetchUrl = `${url}?Timeout=${timeoutMs}&Quality=50&TemplateFormat=ISO`;
-      
+
       const controller = new AbortController();
       const id = setTimeout(() => controller.abort(), timeoutMs + 2000);
-      
+
       const res = await fetch(fetchUrl, {
-        method: 'GET',
-        headers: { 'Accept': 'application/json' },
-        signal: controller.signal
+        method: "GET",
+        headers: { Accept: "application/json" },
+        signal: controller.signal,
       });
       clearTimeout(id);
-      
+
       if (res.ok) {
         const data = await res.json();
         activeSecuGenUrl = url; // Cache working URL
@@ -1169,38 +1333,52 @@ async function capturePhysicalFingerprint(timeoutMs = 15000): Promise<any> {
       lastError = err;
     }
   }
-  throw lastError || new Error("SecuGen WebAPI daemon is offline or unreachable.");
+  throw (
+    lastError || new Error("SecuGen WebAPI daemon is offline or unreachable.")
+  );
 }
 
-async function matchPhysicalTemplates(template1: string, template2: string): Promise<boolean> {
-  const customUrl = loadFromLocalStorage('secugen_api_url', 'https://localhost:8443/SGIFPCapture');
-  
+async function matchPhysicalTemplates(
+  template1: string,
+  template2: string,
+): Promise<boolean> {
+  const customUrl = loadFromLocalStorage(
+    "secugen_api_url",
+    "https://localhost:8443/SGIFPCapture",
+  );
+
   const rawUrls = [];
   if (activeSecuGenMatchUrl) {
     rawUrls.push(activeSecuGenMatchUrl);
   }
-  
+
   // Replace Capture with Match suffix variations for SGIMatchScore
-  const customMatch = customUrl.replace('SGIFPCapture', 'SGIMatchScore').replace('SGIFPM_Capture', 'SGIM_MatchScore');
-  const customMatchUnderscore = customUrl.replace('SGIFPCapture', 'SGIM_MatchScore').replace('SGIFPM_Capture', 'SGIM_MatchScore');
-  
+  const customMatch = customUrl
+    .replace("SGIFPCapture", "SGIMatchScore")
+    .replace("SGIFPM_Capture", "SGIM_MatchScore");
+  const customMatchUnderscore = customUrl
+    .replace("SGIFPCapture", "SGIM_MatchScore")
+    .replace("SGIFPM_Capture", "SGIM_MatchScore");
+
   rawUrls.push(
     customMatch,
     customMatchUnderscore,
-    'https://localhost:8443/SGIMatchScore',
-    'http://localhost:8000/SGIMatchScore',
-    'https://127.0.0.1:8443/SGIMatchScore',
-    'http://127.0.0.1:8000/SGIMatchScore',
-    'https://localhost:8443/SGIM_MatchScore',
-    'http://localhost:8000/SGIM_MatchScore',
-    'https://127.0.0.1:8443/SGIM_MatchScore',
-    'http://127.0.0.1:8000/SGIM_MatchScore',
+    "https://localhost:8443/SGIMatchScore",
+    "http://localhost:8000/SGIMatchScore",
+    "https://127.0.0.1:8443/SGIMatchScore",
+    "http://127.0.0.1:8000/SGIMatchScore",
+    "https://localhost:8443/SGIM_MatchScore",
+    "http://localhost:8000/SGIM_MatchScore",
+    "https://127.0.0.1:8443/SGIM_MatchScore",
+    "http://127.0.0.1:8000/SGIM_MatchScore",
     // Fallback to standard SGIMatch endpoints
-    customUrl.replace('SGIFPCapture', 'SGIFPMatch').replace('SGIFPM_Capture', 'SGIFPM_Match'),
-    'https://localhost:8443/SGIFPMatch',
-    'http://localhost:8000/SGIFPMatch',
-    'https://localhost:8443/SGIFPM_Match',
-    'http://localhost:8000/SGIFPM_Match'
+    customUrl
+      .replace("SGIFPCapture", "SGIFPMatch")
+      .replace("SGIFPM_Capture", "SGIFPM_Match"),
+    "https://localhost:8443/SGIFPMatch",
+    "http://localhost:8000/SGIFPMatch",
+    "https://localhost:8443/SGIFPM_Match",
+    "http://localhost:8000/SGIFPM_Match",
   );
 
   const urls = Array.from(new Set(rawUrls)).filter(Boolean);
@@ -1209,27 +1387,36 @@ async function matchPhysicalTemplates(template1: string, template2: string): Pro
     try {
       // 1. Try JSON payload
       const res = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           template1,
           template2,
-          TemplateFormat: 'ISO'
-        })
+          TemplateFormat: "ISO",
+        }),
       });
       if (res.ok) {
         const data = await res.json();
         activeSecuGenMatchUrl = url; // Cache the working match URL!
         if (data.ErrorCode === 0) {
           // Check for high match score (typically >= 50 or 60 represents a secure match)
-          const score = data.MatchingScore !== undefined ? data.MatchingScore : 
-                        (data.MatchScore !== undefined ? data.MatchScore : 
-                        (data.Score !== undefined ? data.Score : null));
-          
+          const score =
+            data.MatchingScore !== undefined
+              ? data.MatchingScore
+              : data.MatchScore !== undefined
+                ? data.MatchScore
+                : data.Score !== undefined
+                  ? data.Score
+                  : null;
+
           if (score !== null && score >= 50) {
             return true;
           }
-          if (data.Matched === true || data.matched === true || data.Matched === 'TRUE') {
+          if (
+            data.Matched === true ||
+            data.matched === true ||
+            data.Matched === "TRUE"
+          ) {
             return true;
           }
         }
@@ -1244,26 +1431,35 @@ async function matchPhysicalTemplates(template1: string, template2: string): Pro
     try {
       // 2. Try Form Parameters
       const res = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
         body: new URLSearchParams({
           template1,
           template2,
-          TemplateFormat: 'ISO'
-        })
+          TemplateFormat: "ISO",
+        }),
       });
       if (res.ok) {
         const data = await res.json();
         activeSecuGenMatchUrl = url; // Cache the working match URL!
         if (data.ErrorCode === 0) {
-          const score = data.MatchingScore !== undefined ? data.MatchingScore : 
-                        (data.MatchScore !== undefined ? data.MatchScore : 
-                        (data.Score !== undefined ? data.Score : null));
-          
+          const score =
+            data.MatchingScore !== undefined
+              ? data.MatchingScore
+              : data.MatchScore !== undefined
+                ? data.MatchScore
+                : data.Score !== undefined
+                  ? data.Score
+                  : null;
+
           if (score !== null && score >= 50) {
             return true;
           }
-          if (data.Matched === true || data.matched === true || data.Matched === 'TRUE') {
+          if (
+            data.Matched === true ||
+            data.matched === true ||
+            data.Matched === "TRUE"
+          ) {
             return true;
           }
         }
@@ -1283,14 +1479,23 @@ async function matchPhysicalTemplates(template1: string, template2: string): Pro
         const data = await res.json();
         activeSecuGenMatchUrl = url; // Cache the working match URL!
         if (data.ErrorCode === 0) {
-          const score = data.MatchingScore !== undefined ? data.MatchingScore : 
-                        (data.MatchScore !== undefined ? data.MatchScore : 
-                        (data.Score !== undefined ? data.Score : null));
-          
+          const score =
+            data.MatchingScore !== undefined
+              ? data.MatchingScore
+              : data.MatchScore !== undefined
+                ? data.MatchScore
+                : data.Score !== undefined
+                  ? data.Score
+                  : null;
+
           if (score !== null && score >= 50) {
             return true;
           }
-          if (data.Matched === true || data.matched === true || data.Matched === 'TRUE') {
+          if (
+            data.Matched === true ||
+            data.matched === true ||
+            data.Matched === "TRUE"
+          ) {
             return true;
           }
         }
@@ -1306,30 +1511,48 @@ async function matchPhysicalTemplates(template1: string, template2: string): Pro
 }
 
 async function handlePhysicalScan() {
-  const prism = document.getElementById('physical-scanner-prism');
-  const laser = document.getElementById('physical-scanner-laser');
-  const preview = document.getElementById('physical-scanner-preview');
-  const fingerImg = document.getElementById('physical-fingerprint-img') as HTMLImageElement;
-  const placeholderIcon = document.getElementById('physical-scanner-placeholder');
-  
-  const stateStandby = document.getElementById('physical-state-standby');
-  const stateScanning = document.getElementById('physical-state-scanning');
-  const stateSuccess = document.getElementById('physical-state-success');
-  const stateNoMatch = document.getElementById('physical-state-no-match');
-  const stateHardwareError = document.getElementById('physical-state-hardware-error');
+  const prism = document.getElementById("physical-scanner-prism");
+  const laser = document.getElementById("physical-scanner-laser");
+  const preview = document.getElementById("physical-scanner-preview");
+  const fingerImg = document.getElementById(
+    "physical-fingerprint-img",
+  ) as HTMLImageElement;
+  const placeholderIcon = document.getElementById(
+    "physical-scanner-placeholder",
+  );
 
-  if (!prism || !laser || !preview || !fingerImg || !placeholderIcon || !stateStandby || !stateScanning || !stateSuccess || !stateNoMatch || !stateHardwareError) return;
+  const stateStandby = document.getElementById("physical-state-standby");
+  const stateScanning = document.getElementById("physical-state-scanning");
+  const stateSuccess = document.getElementById("physical-state-success");
+  const stateNoMatch = document.getElementById("physical-state-no-match");
+  const stateHardwareError = document.getElementById(
+    "physical-state-hardware-error",
+  );
 
-  stateStandby.classList.add('hidden');
-  stateSuccess.classList.add('hidden');
-  stateNoMatch.classList.add('hidden');
-  stateHardwareError.classList.add('hidden');
-  stateScanning.classList.remove('hidden');
+  if (
+    !prism ||
+    !laser ||
+    !preview ||
+    !fingerImg ||
+    !placeholderIcon ||
+    !stateStandby ||
+    !stateScanning ||
+    !stateSuccess ||
+    !stateNoMatch ||
+    !stateHardwareError
+  )
+    return;
 
-  laser.classList.remove('hidden');
-  laser.style.top = '0%';
-  preview.classList.add('hidden');
-  placeholderIcon.classList.add('text-cyan-500');
+  stateStandby.classList.add("hidden");
+  stateSuccess.classList.add("hidden");
+  stateNoMatch.classList.add("hidden");
+  stateHardwareError.classList.add("hidden");
+  stateScanning.classList.remove("hidden");
+
+  laser.classList.remove("hidden");
+  laser.style.top = "0%";
+  preview.classList.add("hidden");
+  placeholderIcon.classList.add("text-cyan-500");
 
   let pos = 0;
   const interval = setInterval(() => {
@@ -1339,22 +1562,31 @@ async function handlePhysicalScan() {
   }, 45);
 
   try {
-    addLiveLog('device_connected', "Initializing hardware connection request to SecuGen HU20 scanner over USB...");
-    
+    addLiveLog(
+      "device_connected",
+      "Initializing hardware connection request to SecuGen HU20 scanner over USB...",
+    );
+
     const captureData = await capturePhysicalFingerprint(15000);
-    
+
     clearInterval(interval);
-    laser.classList.add('hidden');
+    laser.classList.add("hidden");
 
     if (captureData.ErrorCode !== 0) {
-      throw new Error(captureData.ErrorDescription || `WebAPI Error Code ${captureData.ErrorCode}`);
+      throw new Error(
+        captureData.ErrorDescription ||
+          `WebAPI Error Code ${captureData.ErrorCode}`,
+      );
     }
 
-    addLiveLog('device_connected', `SecuGen HU20 capture success! Quality score: ${captureData.Quality}%.`);
-    
+    addLiveLog(
+      "device_connected",
+      `SecuGen HU20 capture success! Quality score: ${captureData.Quality}%.`,
+    );
+
     if (captureData.BMPBase64) {
       fingerImg.src = `data:image/bmp;base64,${captureData.BMPBase64}`;
-      preview.classList.remove('hidden');
+      preview.classList.remove("hidden");
     }
 
     const capturedTemplate = captureData.TemplateBase64;
@@ -1362,14 +1594,20 @@ async function handlePhysicalScan() {
       throw new Error("No template captured from biometric scanner prism.");
     }
 
-    addLiveLog('device_connected', "Comparing scanned template against database registry...");
-    
+    addLiveLog(
+      "device_connected",
+      "Comparing scanned template against database registry...",
+    );
+
     let matchedUser = null;
     let matchedFingerName = "Right Index";
 
     for (const user of users) {
       if (user.fingerprintId) {
-        const isMatch = await matchPhysicalTemplates(capturedTemplate, user.fingerprintId);
+        const isMatch = await matchPhysicalTemplates(
+          capturedTemplate,
+          user.fingerprintId,
+        );
         if (isMatch) {
           matchedUser = user;
           matchedFingerName = "Right Index";
@@ -1380,10 +1618,16 @@ async function handlePhysicalScan() {
       if (user.fingers && user.fingers.length > 0) {
         let found = false;
         for (const finger of user.fingers) {
-          if (finger.fingerName === "Right Index" && user.fingerprintId === finger.templateData) {
+          if (
+            finger.fingerName === "Right Index" &&
+            user.fingerprintId === finger.templateData
+          ) {
             continue;
           }
-          const isMatch = await matchPhysicalTemplates(capturedTemplate, finger.templateData);
+          const isMatch = await matchPhysicalTemplates(
+            capturedTemplate,
+            finger.templateData,
+          );
           if (isMatch) {
             matchedUser = user;
             matchedFingerName = finger.fingerName;
@@ -1395,22 +1639,28 @@ async function handlePhysicalScan() {
       }
     }
 
-    stateScanning.classList.add('hidden');
+    stateScanning.classList.add("hidden");
 
     if (matchedUser) {
       const punchInfo = recordPunch(matchedUser.id, matchedFingerName);
-      
-      const avatar = document.getElementById('matched-employee-avatar') as HTMLImageElement;
-      const nameTxt = document.getElementById('matched-employee-name');
-      const idTxt = document.getElementById('matched-employee-id');
-      const desTxt = document.getElementById('matched-employee-designation');
-      const punchTxt = document.getElementById('matched-employee-punch');
 
-      if (avatar) avatar.src = matchedUser.avatar || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=200";
+      const avatar = document.getElementById(
+        "matched-employee-avatar",
+      ) as HTMLImageElement;
+      const nameTxt = document.getElementById("matched-employee-name");
+      const idTxt = document.getElementById("matched-employee-id");
+      const desTxt = document.getElementById("matched-employee-designation");
+      const punchTxt = document.getElementById("matched-employee-punch");
+
+      if (avatar)
+        avatar.src =
+          matchedUser.avatar ||
+          "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=200";
       if (nameTxt) nameTxt.textContent = matchedUser.name;
-      if (idTxt) idTxt.textContent = `${matchedUser.id} • ${matchedUser.department}`;
+      if (idTxt)
+        idTxt.textContent = `${matchedUser.id} • ${matchedUser.department}`;
       if (desTxt) desTxt.textContent = matchedUser.designation;
-      
+
       if (punchTxt && punchInfo) {
         if (punchInfo.isClockOut) {
           punchTxt.innerHTML = `<span class="text-amber-400">Clocked Out</span> at ${getFormattedTime()}`;
@@ -1419,24 +1669,29 @@ async function handlePhysicalScan() {
         }
       }
 
-      stateSuccess.classList.remove('hidden');
+      stateSuccess.classList.remove("hidden");
     } else {
-      playBeep('failure');
-      addLiveLog('scan_failed', "Biometric identification failed: Unknown fingerprint signature.");
-      stateNoMatch.classList.remove('hidden');
+      playBeep("failure");
+      addLiveLog(
+        "scan_failed",
+        "Biometric identification failed: Unknown fingerprint signature.",
+      );
+      stateNoMatch.classList.remove("hidden");
     }
-
   } catch (err: any) {
     clearInterval(interval);
-    laser.classList.add('hidden');
-    placeholderIcon.classList.remove('text-cyan-500');
-    
+    laser.classList.add("hidden");
+    placeholderIcon.classList.remove("text-cyan-500");
+
     console.error("Physical capture failed:", err);
-    addLiveLog('scan_failed', `Physical Scanner Error: ${err.message || String(err)}`);
-    
-    stateScanning.classList.add('hidden');
-    stateHardwareError.classList.remove('hidden');
-    playBeep('failure');
+    addLiveLog(
+      "scan_failed",
+      `Physical Scanner Error: ${err.message || String(err)}`,
+    );
+
+    stateScanning.classList.add("hidden");
+    stateHardwareError.classList.remove("hidden");
+    playBeep("failure");
   }
 }
 
@@ -1447,22 +1702,22 @@ function triggerEnrollScan(): Promise<boolean> {
       return;
     }
 
-    const laser = document.getElementById('scanner-laser');
-    const icon = document.getElementById('enroll-scanner-icon');
-    const instruction = document.getElementById('enroll-instruction');
-    const statusDetail = document.getElementById('enroll-status-detail');
-    const dotsContainer = document.getElementById('enroll-progress-dots');
-    const prism = document.getElementById('scanner-prism');
+    const laser = document.getElementById("scanner-laser");
+    const icon = document.getElementById("enroll-scanner-icon");
+    const instruction = document.getElementById("enroll-instruction") || "";
+    const statusDetail = document.getElementById("enroll-status-detail") || "";
+    const dotsContainer = document.getElementById("enroll-progress-dots") || "";
+    const prism = document.getElementById("scanner-prism");
 
     if (!laser || !icon || !instruction || !statusDetail || !prism) {
       resolve(false);
       return;
     }
 
-    laser.classList.remove('hidden');
-    laser.style.top = '0%';
-    icon.classList.add('text-cyan-400');
-    icon.classList.remove('text-slate-700');
+    laser.classList.remove("hidden");
+    laser.style.top = "0%";
+    icon.classList.add("text-cyan-400");
+    icon.classList.remove("text-slate-700");
 
     let pos = 0;
     const interval = setInterval(() => {
@@ -1471,17 +1726,22 @@ function triggerEnrollScan(): Promise<boolean> {
       if (pos >= 100) pos = 0;
     }, 40);
 
-    if (driverMode === 'secugen') {
-      instruction.textContent = "অনুগ্রহ করে আপনার আঙ্গুলটি স্ক্যানার প্রিজমে রাখুন... (Please place your finger on the scanner prism)";
-      statusDetail.textContent = "Capturing from physical SecuGen HU20 WebAPI...";
-      
+    if (driverMode === "secugen") {
+      instruction.textContent =
+        "অনুগ্রহ করে আপনার আঙ্গুলটি স্ক্যানার প্রিজমে রাখুন... (Please place your finger on the scanner prism)";
+      statusDetail.textContent =
+        "Capturing from physical SecuGen HU20 WebAPI...";
+
       try {
         const captureData = await capturePhysicalFingerprint(15000);
         clearInterval(interval);
-        laser.classList.add('hidden');
+        laser.classList.add("hidden");
 
         if (captureData.ErrorCode !== 0) {
-          throw new Error(captureData.ErrorDescription || `WebAPI Error Code ${captureData.ErrorCode}`);
+          throw new Error(
+            captureData.ErrorDescription ||
+              `WebAPI Error Code ${captureData.ErrorCode}`,
+          );
         }
 
         if (captureData.TemplateBase64) {
@@ -1501,23 +1761,31 @@ function triggerEnrollScan(): Promise<boolean> {
 
         completeStep();
         resolve(true);
-
       } catch (err: any) {
         clearInterval(interval);
-        laser.classList.add('hidden');
-        icon.classList.remove('text-cyan-400');
-        icon.classList.add('text-slate-700');
+        laser.classList.add("hidden");
+        icon.classList.remove("text-cyan-400");
+        icon.classList.add("text-slate-700");
 
-        playBeep('failure');
-        addLiveLog('scan_failed', `Biometric Enrollment Scan ${enrollStep + 1} Failed: ${err.message || String(err)}`);
-        
+        playBeep("failure");
+        addLiveLog(
+          "scan_failed",
+          `Biometric Enrollment Scan ${enrollStep + 1} Failed: ${err.message || String(err)}`,
+        );
+
         // Differentiate normal timeout from hard connection failure
-        const isTimeout = err.message && (err.message.includes("Timeout") || err.message.includes("1") || err.message.includes("102"));
+        const isTimeout =
+          err.message &&
+          (err.message.includes("Timeout") ||
+            err.message.includes("1") ||
+            err.message.includes("102"));
         if (isTimeout) {
-          instruction.textContent = "আঙ্গুলটি সঠিকভাবে রাখুন (Please place your finger correctly on the prism).";
+          instruction.textContent =
+            "আঙ্গুলটি সঠিকভাবে রাখুন (Please place your finger correctly on the prism).";
           statusDetail.textContent = `পুনরায় স্ক্যান করার চেষ্টা করা হচ্ছে... (Retrying scan...)`;
         } else {
-          instruction.textContent = "স্ক্যানারটি সংযুক্ত করুন অথবা লোকালহোস্ট সার্টিফিকেট ট্রাস্ট করুন।";
+          instruction.textContent =
+            "স্ক্যানারটি সংযুক্ত করুন অথবা লোকালহোস্ট সার্টিফিকেট ট্রাস্ট করুন।";
           statusDetail.innerHTML = `
             <div class="text-rose-400 font-bold font-mono text-[11px] mb-2">Error: ${err.message || "Failed to fetch"}</div>
             <div class="bg-slate-950/60 p-3 rounded-xl border border-slate-850/80 text-left text-[11px] text-slate-300 space-y-1">
@@ -1533,10 +1801,11 @@ function triggerEnrollScan(): Promise<boolean> {
       }
     } else {
       // Simulator Mode fallback
-      instruction.textContent = "Simulation driver processing mock fingerprint signatures...";
+      instruction.textContent =
+        "Simulation driver processing mock fingerprint signatures...";
       setTimeout(() => {
         clearInterval(interval);
-        laser.classList.add('hidden');
+        laser.classList.add("hidden");
         completeStep();
         resolve(true);
       }, 1500);
@@ -1544,22 +1813,31 @@ function triggerEnrollScan(): Promise<boolean> {
 
     function completeStep() {
       enrollStep++;
-      playBeep('enroll');
-      addLiveLog('enroll_success', `Scan successful for ${enrollUser?.name}. Auto-saving enrollment...`, enrollUser?.id);
+      playBeep("enroll");
+      addLiveLog(
+        "enroll_success",
+        `Scan successful for ${enrollUser?.name}. Auto-saving enrollment...`,
+        enrollUser?.id,
+      );
 
       // Update progress dot
       if (dotsContainer) {
-        const dots = dotsContainer.querySelectorAll('span');
+        const dots = dotsContainer.querySelectorAll("span");
         if (dots[0]) {
-          dots[0].className = "h-2.5 w-2.5 rounded-full bg-cyan-400 border border-cyan-300 shadow-lg shadow-cyan-400/50 animate-pulse";
+          dots[0].className =
+            "h-2.5 w-2.5 rounded-full bg-cyan-400 border border-cyan-300 shadow-lg shadow-cyan-400/50 animate-pulse";
         }
       }
 
-      instruction.textContent = "Fingerprint captured successfully! Saving to database...";
-      statusDetail.textContent = "Auto-saving biometric template. Please wait...";
+      instruction.textContent =
+        "Fingerprint captured successfully! Saving to database...";
+      statusDetail.textContent =
+        "Auto-saving biometric template. Please wait...";
 
       if (enrollScanBuffer.length === 0) {
-        enrollScanBuffer.push(`MOCK-ISO-TEMPLATE-${Math.random().toString(36).substring(2, 12).toUpperCase()}`);
+        enrollScanBuffer.push(
+          `MOCK-ISO-TEMPLATE-${Math.random().toString(36).substring(2, 12).toUpperCase()}`,
+        );
       }
 
       prism.innerHTML = `
@@ -1580,14 +1858,18 @@ function triggerEnrollScan(): Promise<boolean> {
 async function saveBiometricEnrollment() {
   if (!enrollUser) return;
 
-  const select = document.getElementById('enroll-finger-select') as HTMLSelectElement;
+  const select = document.getElementById(
+    "enroll-finger-select",
+  ) as HTMLSelectElement;
   const fingerName = select ? select.value : "Right Index";
 
-  const capturedTemplate = enrollScanBuffer[enrollScanBuffer.length - 1] || `FP-MOCK-${Math.floor(1000 + Math.random() * 9000)}`;
+  const capturedTemplate =
+    enrollScanBuffer[enrollScanBuffer.length - 1] ||
+    `FP-MOCK-${Math.floor(1000 + Math.random() * 9000)}`;
 
   const bodyPayload: any = {
     fingerName,
-    templateData: capturedTemplate
+    templateData: capturedTemplate,
   };
 
   // If we have physical capture data, merge all those fields into the body payload!
@@ -1605,23 +1887,25 @@ async function saveBiometricEnrollment() {
       Model: lastCapturedData.Model,
       NFIQ: lastCapturedData.NFIQ,
       SerialNumber: lastCapturedData.SerialNumber,
-      TemplateBase64: lastCapturedData.TemplateBase64
+      TemplateBase64: lastCapturedData.TemplateBase64,
     });
   }
 
   try {
     const res = await fetch(`/api/users/${enrollUser.id}/fingers`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(bodyPayload)
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(bodyPayload),
     });
 
     if (res.ok) {
-      const uIndex = users.findIndex(u => u.id === enrollUser?.id);
+      const uIndex = users.findIndex((u) => u.id === enrollUser?.id);
       if (uIndex > -1) {
         const localUser = users[uIndex];
         if (!localUser.fingers) localUser.fingers = [];
-        localUser.fingers = localUser.fingers.filter(f => f.fingerName !== fingerName);
+        localUser.fingers = localUser.fingers.filter(
+          (f) => f.fingerName !== fingerName,
+        );
         localUser.fingers.push({
           fingerName,
           templateData: capturedTemplate,
@@ -1637,16 +1921,20 @@ async function saveBiometricEnrollment() {
           Model: lastCapturedData?.Model,
           NFIQ: lastCapturedData?.NFIQ,
           SerialNumber: lastCapturedData?.SerialNumber,
-          TemplateBase64: lastCapturedData?.TemplateBase64
+          TemplateBase64: lastCapturedData?.TemplateBase64,
         });
         localUser.fingerprintId = capturedTemplate;
       }
 
-      addLiveLog('enroll_success', `Enrolled '${fingerName}' successfully. Registered biometric template.`, enrollUser.id);
-      initFingerprint(enrollUser.id, 'biometric_enrollment', 'Success');
-      
-      const modal = document.getElementById('enroll-modal');
-      if (modal) modal.classList.add('hidden');
+      addLiveLog(
+        "enroll_success",
+        `Enrolled '${fingerName}' successfully. Registered biometric template.`,
+        enrollUser.id,
+      );
+      initFingerprint(enrollUser.id, "biometric_enrollment", "Success");
+
+      const modal = document.getElementById("enroll-modal");
+      if (modal) modal.classList.add("hidden");
 
       renderUsers();
       populateSimulatorDropdown();
@@ -1660,26 +1948,33 @@ async function saveBiometricEnrollment() {
 }
 
 // EDIT AND DELETE WORKFORCE PROFILES
-window.editEmployee = function(userId: string) {
-  const user = users.find(u => u.id === userId);
+window.editEmployee = function (userId: string) {
+  const user = users.find((u) => u.id === userId);
   if (user) {
     openRegisterModal(user);
   }
 };
 
-window.deleteEmployee = async function(userId: string) {
-  const user = users.find(u => u.id === userId);
+window.deleteEmployee = async function (userId: string) {
+  const user = users.find((u) => u.id === userId);
   if (!user) return;
 
-  if (confirm(`Are you sure you want to delete employee '${user.name}' (${user.id})? This is non-reversible.`)) {
+  if (
+    confirm(
+      `Are you sure you want to delete employee '${user.name}' (${user.id})? This is non-reversible.`,
+    )
+  ) {
     try {
       const res = await fetch(`/api/users/${user.id}`, {
-        method: 'DELETE'
+        method: "DELETE",
       });
 
       if (res.ok) {
-        users = users.filter(u => u.id !== user.id);
-        addLiveLog('scan_failed', `Database Modified: Terminated employee profile '${user.name}' (${user.id}) from MySQL.`);
+        users = users.filter((u) => u.id !== user.id);
+        addLiveLog(
+          "scan_failed",
+          `Database Modified: Terminated employee profile '${user.name}' (${user.id}) from MySQL.`,
+        );
         renderStats();
         renderDashboard();
         renderUsers();
@@ -1697,15 +1992,24 @@ window.deleteEmployee = async function(userId: string) {
 // INITIALIZE EVENT LISTENERS & DELEGATION
 function initApplication() {
   // Load local stores
-  attendance = loadFromLocalStorage('bio_attendance', []);
-  logs = loadFromLocalStorage('bio_logs', []);
+  attendance = loadFromLocalStorage("bio_attendance", []);
+  logs = loadFromLocalStorage("bio_logs", []);
 
   // Initialize custom SecuGen API URL configuration
-  const secugenApiUrlInp = document.getElementById('secugen-api-url-input') as HTMLInputElement;
-  const btnSaveSecugenApiUrl = document.getElementById('btn-save-secugen-api-url');
-  const consoleHostUrlPreview = document.getElementById('console-host-url-preview');
-  const currentSecugenUrl = loadFromLocalStorage('secugen_api_url', 'https://localhost:8443/SGIFPCapture');
-  
+  const secugenApiUrlInp = document.getElementById(
+    "secugen-api-url-input",
+  ) as HTMLInputElement;
+  const btnSaveSecugenApiUrl = document.getElementById(
+    "btn-save-secugen-api-url",
+  );
+  const consoleHostUrlPreview = document.getElementById(
+    "console-host-url-preview",
+  );
+  const currentSecugenUrl = loadFromLocalStorage(
+    "secugen_api_url",
+    "https://localhost:8443/SGIFPCapture",
+  );
+
   if (secugenApiUrlInp) {
     secugenApiUrlInp.value = currentSecugenUrl;
   }
@@ -1714,23 +2018,29 @@ function initApplication() {
   }
 
   if (btnSaveSecugenApiUrl && secugenApiUrlInp) {
-    btnSaveSecugenApiUrl.addEventListener('click', () => {
+    btnSaveSecugenApiUrl.addEventListener("click", () => {
       let val = secugenApiUrlInp.value.trim();
       if (!val) {
-        val = 'https://localhost:8443/SGIFPCapture';
+        val = "https://localhost:8443/SGIFPCapture";
       }
-      saveToLocalStorage('secugen_api_url', val);
+      saveToLocalStorage("secugen_api_url", val);
       if (consoleHostUrlPreview) {
         consoleHostUrlPreview.textContent = val;
       }
-      addLiveLog('device_connected', `SecuGen API endpoint URL updated to: ${val}`);
+      addLiveLog(
+        "device_connected",
+        `SecuGen API endpoint URL updated to: ${val}`,
+      );
       performScannerStatusCheck();
     });
   }
 
   // Set default logging message on launch
   if (logs.length === 0) {
-    addLiveLog('device_connected', 'Biometric scanner daemon services started on localhost.');
+    addLiveLog(
+      "device_connected",
+      "Biometric scanner daemon services started on localhost.",
+    );
   }
 
   // Load and pull users
@@ -1744,102 +2054,125 @@ function initApplication() {
   initFingerprint();
 
   // Handle fingerprint tag button click
-  const fpApplyTagBtn = document.getElementById('fp-apply-tag-btn');
-  const fpTagSelect = document.getElementById('fp-tag-user-select') as HTMLSelectElement;
+  const fpApplyTagBtn = document.getElementById("fp-apply-tag-btn");
+  const fpTagSelect = document.getElementById(
+    "fp-tag-user-select",
+  ) as HTMLSelectElement;
   if (fpApplyTagBtn && fpTagSelect) {
-    fpApplyTagBtn.addEventListener('click', () => {
+    fpApplyTagBtn.addEventListener("click", () => {
       const selectedUserId = fpTagSelect.value;
       if (selectedUserId) {
-        initFingerprint(selectedUserId, 'session_association', 'Active');
-        addLiveLog('device_connected', `Applied Fingerprint Pro session tag matching User ID: ${selectedUserId}`);
+        initFingerprint(selectedUserId, "session_association", "Active");
+        addLiveLog(
+          "device_connected",
+          `Applied Fingerprint Pro session tag matching User ID: ${selectedUserId}`,
+        );
       } else {
-        initFingerprint(undefined, 'anonymous_visit', 'Standby');
-        addLiveLog('device_connected', 'Cleared Fingerprint Pro session tag association.');
+        initFingerprint(undefined, "anonymous_visit", "Standby");
+        addLiveLog(
+          "device_connected",
+          "Cleared Fingerprint Pro session tag association.",
+        );
       }
     });
   }
 
   // Navigation tab click routing
-  document.querySelectorAll('#sidebar-nav button').forEach(btn => {
-    btn.addEventListener('click', (e) => {
+  document.querySelectorAll("#sidebar-nav button").forEach((btn) => {
+    btn.addEventListener("click", (e) => {
       const tabId = (e.currentTarget as HTMLElement).dataset.tab as any;
       switchTab(tabId);
     });
   });
 
   // Sound toggle button click
-  const soundBtn = document.getElementById('sound-toggle-btn');
-  const soundIcon = document.getElementById('sound-icon');
+  const soundBtn = document.getElementById("sound-toggle-btn");
+  const soundIcon = document.getElementById("sound-icon");
   if (soundBtn && soundIcon) {
-    soundBtn.addEventListener('click', () => {
+    soundBtn.addEventListener("click", () => {
       soundEnabled = !soundEnabled;
       if (soundEnabled) {
-        soundIcon.setAttribute('data-lucide', 'volume-2');
-        addLiveLog('device_connected', 'Audio cues indicator alerts: Enabled.');
+        soundIcon.setAttribute("data-lucide", "volume-2");
+        addLiveLog("device_connected", "Audio cues indicator alerts: Enabled.");
       } else {
-        soundIcon.setAttribute('data-lucide', 'volume-x');
-        addLiveLog('device_connected', 'Audio cues indicator alerts: Muted.');
+        soundIcon.setAttribute("data-lucide", "volume-x");
+        addLiveLog("device_connected", "Audio cues indicator alerts: Muted.");
       }
       lucide.createIcons();
     });
   }
 
   // Dashboard Filters
-  const dbDeptFilterSelect = document.getElementById('dashboard-dept-filter');
+  const dbDeptFilterSelect = document.getElementById("dashboard-dept-filter");
   if (dbDeptFilterSelect) {
-    dbDeptFilterSelect.addEventListener('change', (e) => {
+    dbDeptFilterSelect.addEventListener("change", (e) => {
       dashboardDeptFilter = (e.target as HTMLSelectElement).value;
       renderDashboard();
     });
   }
 
   // Workforce Filters & Search
-  const userSearchInp = document.getElementById('user-search-input');
+  const userSearchInp = document.getElementById("user-search-input");
   if (userSearchInp) {
-    userSearchInp.addEventListener('input', (e) => {
+    userSearchInp.addEventListener("input", (e) => {
       userSearchQuery = (e.target as HTMLInputElement).value;
       renderUsers();
     });
   }
 
-  const userDeptFilterSelect = document.getElementById('user-dept-filter');
+  const userDeptFilterSelect = document.getElementById("user-dept-filter");
   if (userDeptFilterSelect) {
-    userDeptFilterSelect.addEventListener('change', (e) => {
+    userDeptFilterSelect.addEventListener("change", (e) => {
       userDeptFilter = (e.target as HTMLSelectElement).value;
       renderUsers();
     });
   }
 
-  const userBioFilterSelect = document.getElementById('user-bio-filter');
+  const userBioFilterSelect = document.getElementById("user-bio-filter");
   if (userBioFilterSelect) {
-    userBioFilterSelect.addEventListener('change', (e) => {
+    userBioFilterSelect.addEventListener("change", (e) => {
       userBioFilter = (e.target as HTMLSelectElement).value;
       renderUsers();
     });
   }
 
   // Register Employee Modal Triggers
-  const openRegBtn = document.getElementById('btn-open-register-modal');
-  const closeRegBtn = document.getElementById('btn-close-register-modal');
-  const cancelRegBtn = document.getElementById('btn-cancel-register');
-  const regForm = document.getElementById('register-employee-form');
+  const openRegBtn = document.getElementById("btn-open-register-modal");
+  const closeRegBtn = document.getElementById("btn-close-register-modal");
+  const cancelRegBtn = document.getElementById("btn-cancel-register");
+  const regForm = document.getElementById("register-employee-form");
 
-  if (openRegBtn) openRegBtn.addEventListener('click', () => openRegisterModal());
-  if (closeRegBtn) closeRegBtn.addEventListener('click', closeRegisterModal);
-  if (cancelRegBtn) cancelRegBtn.addEventListener('click', closeRegisterModal);
+  if (openRegBtn)
+    openRegBtn.addEventListener("click", () => openRegisterModal());
+  if (closeRegBtn) closeRegBtn.addEventListener("click", closeRegisterModal);
+  if (cancelRegBtn) cancelRegBtn.addEventListener("click", closeRegisterModal);
 
   if (regForm) {
-    regForm.addEventListener('submit', async (e) => {
+    regForm.addEventListener("submit", async (e) => {
       e.preventDefault();
 
-      const editIdVal = (document.getElementById('form-edit-id') as HTMLInputElement).value;
-      const idVal = (document.getElementById('form-id') as HTMLInputElement).value;
-      const nameVal = (document.getElementById('form-name') as HTMLInputElement).value;
-      const deptVal = (document.getElementById('form-department') as HTMLSelectElement).value;
-      const desVal = (document.getElementById('form-designation') as HTMLInputElement).value;
-      const emailVal = (document.getElementById('form-email') as HTMLInputElement).value;
-      const phoneVal = (document.getElementById('form-phone') as HTMLInputElement).value;
-      const avatarVal = (document.getElementById('form-avatar') as HTMLInputElement).value;
+      const editIdVal = (
+        document.getElementById("form-edit-id") as HTMLInputElement
+      ).value;
+      const idVal = (document.getElementById("form-id") as HTMLInputElement)
+        .value;
+      const nameVal = (document.getElementById("form-name") as HTMLInputElement)
+        .value;
+      const deptVal = (
+        document.getElementById("form-department") as HTMLSelectElement
+      ).value;
+      const desVal = (
+        document.getElementById("form-designation") as HTMLInputElement
+      ).value;
+      const emailVal = (
+        document.getElementById("form-email") as HTMLInputElement
+      ).value;
+      const phoneVal = (
+        document.getElementById("form-phone") as HTMLInputElement
+      ).value;
+      const avatarVal = (
+        document.getElementById("form-avatar") as HTMLInputElement
+      ).value;
 
       const bodyPayload = {
         id: idVal,
@@ -1848,25 +2181,30 @@ function initApplication() {
         designation: desVal,
         email: emailVal,
         phone: phoneVal,
-        avatar: avatarVal || `https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=200`,
-        joinedDate: new Date().toISOString().split('T')[0]
+        avatar:
+          avatarVal ||
+          `https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=200`,
+        joinedDate: new Date().toISOString().split("T")[0],
       };
 
       if (editIdVal) {
         // UPDATE existing user
         try {
           const res = await fetch(`/api/users/${editIdVal}`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(bodyPayload)
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(bodyPayload),
           });
 
           if (res.ok) {
-            const index = users.findIndex(u => u.id === editIdVal);
+            const index = users.findIndex((u) => u.id === editIdVal);
             if (index > -1) {
               users[index] = { ...users[index], ...bodyPayload };
             }
-            addLiveLog('device_connected', `Profile Updated: Modified metadata for '${nameVal}' in MySQL.`);
+            addLiveLog(
+              "device_connected",
+              `Profile Updated: Modified metadata for '${nameVal}' in MySQL.`,
+            );
             closeRegisterModal();
             renderUsers();
             renderDashboard();
@@ -1877,15 +2215,26 @@ function initApplication() {
       } else {
         // CREATE new user
         try {
-          const res = await fetch('/api/users', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ ...bodyPayload, status: 'Absent', fingerprintId: null })
+          const res = await fetch("/api/users", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              ...bodyPayload,
+              status: "Absent",
+              fingerprintId: null,
+            }),
           });
 
           if (res.ok) {
-            users.push({ ...bodyPayload, status: 'Absent', fingerprintId: null });
-            addLiveLog('device_connected', `Registry Created: Registered database record for '${nameVal}' (${idVal}) in MySQL.`);
+            users.push({
+              ...bodyPayload,
+              status: "Absent",
+              fingerprintId: null,
+            });
+            addLiveLog(
+              "device_connected",
+              `Registry Created: Registered database record for '${nameVal}' (${idVal}) in MySQL.`,
+            );
             closeRegisterModal();
             renderUsers();
             renderStats();
@@ -1899,85 +2248,102 @@ function initApplication() {
   }
 
   // Biometric Enrollment Modal Interaction triggers
-  const scannerPrism = document.getElementById('scanner-prism');
-  const closeEnrollBtn = document.getElementById('btn-close-enroll-modal');
-  const cancelEnrollBtn = document.getElementById('btn-cancel-enroll');
-  const saveEnrollBtn = document.getElementById('btn-save-enroll');
+  const scannerPrism = document.getElementById("scanner-prism");
+  const closeEnrollBtn = document.getElementById("btn-close-enroll-modal");
+  const cancelEnrollBtn = document.getElementById("btn-cancel-enroll");
+  const saveEnrollBtn = document.getElementById("btn-save-enroll");
 
   if (scannerPrism) {
-    scannerPrism.addEventListener('click', triggerEnrollScan);
+    scannerPrism.addEventListener("click", triggerEnrollScan);
   }
   if (closeEnrollBtn) {
-    closeEnrollBtn.addEventListener('click', () => {
-      const m = document.getElementById('enroll-modal');
-      if (m) m.classList.add('hidden');
+    closeEnrollBtn.addEventListener("click", () => {
+      const m = document.getElementById("enroll-modal");
+      if (m) m.classList.add("hidden");
       enrollUser = null;
     });
   }
   if (cancelEnrollBtn) {
-    cancelEnrollBtn.addEventListener('click', () => {
-      const m = document.getElementById('enroll-modal');
-      if (m) m.classList.add('hidden');
+    cancelEnrollBtn.addEventListener("click", () => {
+      const m = document.getElementById("enroll-modal");
+      if (m) m.classList.add("hidden");
       enrollUser = null;
     });
   }
   if (saveEnrollBtn) {
-    saveEnrollBtn.addEventListener('click', saveBiometricEnrollment);
+    saveEnrollBtn.addEventListener("click", saveBiometricEnrollment);
   }
 
   // Driver buttons toggle logic
-  const secugenDriverBtn = document.getElementById('driver-secugen-btn');
-  const bridgeDriverBtn = document.getElementById('driver-bridge-btn');
+  const secugenDriverBtn = document.getElementById("driver-secugen-btn");
+  const bridgeDriverBtn = document.getElementById("driver-bridge-btn");
 
   if (secugenDriverBtn && bridgeDriverBtn) {
-    secugenDriverBtn.addEventListener('click', () => {
-      driverMode = 'secugen';
-      secugenDriverBtn.className = "py-2 px-3 border border-cyan-500/30 text-cyan-400 bg-cyan-950/20 text-xs font-bold rounded-xl cursor-pointer hover:border-cyan-400 transition-all text-center";
-      bridgeDriverBtn.className = "py-2 px-3 border border-slate-800 text-slate-400 bg-slate-900/40 text-xs font-bold rounded-xl cursor-pointer hover:border-slate-700 hover:text-slate-200 transition-all text-center";
-      addLiveLog('device_connected', "Driver SDK Mode modified: Switched to SecuGen WebAPI HTTPS protocol on port 8443.");
+    secugenDriverBtn.addEventListener("click", () => {
+      driverMode = "secugen";
+      secugenDriverBtn.className =
+        "py-2 px-3 border border-cyan-500/30 text-cyan-400 bg-cyan-950/20 text-xs font-bold rounded-xl cursor-pointer hover:border-cyan-400 transition-all text-center";
+      bridgeDriverBtn.className =
+        "py-2 px-3 border border-slate-800 text-slate-400 bg-slate-900/40 text-xs font-bold rounded-xl cursor-pointer hover:border-slate-700 hover:text-slate-200 transition-all text-center";
+      addLiveLog(
+        "device_connected",
+        "Driver SDK Mode modified: Switched to SecuGen WebAPI HTTPS protocol on port 8443.",
+      );
     });
 
-    bridgeDriverBtn.addEventListener('click', () => {
-      driverMode = 'bridge';
-      bridgeDriverBtn.className = "py-2 px-3 border border-cyan-500/30 text-cyan-400 bg-cyan-950/20 text-xs font-bold rounded-xl cursor-pointer hover:border-cyan-400 transition-all text-center";
-      secugenDriverBtn.className = "py-2 px-3 border border-slate-800 text-slate-400 bg-slate-900/40 text-xs font-bold rounded-xl cursor-pointer hover:border-slate-700 hover:text-slate-200 transition-all text-center";
-      addLiveLog('device_connected', "Driver SDK Mode modified: Activated local background listening TCP bridge on port 8443.");
+    bridgeDriverBtn.addEventListener("click", () => {
+      driverMode = "bridge";
+      bridgeDriverBtn.className =
+        "py-2 px-3 border border-cyan-500/30 text-cyan-400 bg-cyan-950/20 text-xs font-bold rounded-xl cursor-pointer hover:border-cyan-400 transition-all text-center";
+      secugenDriverBtn.className =
+        "py-2 px-3 border border-slate-800 text-slate-400 bg-slate-900/40 text-xs font-bold rounded-xl cursor-pointer hover:border-slate-700 hover:text-slate-200 transition-all text-center";
+      addLiveLog(
+        "device_connected",
+        "Driver SDK Mode modified: Activated local background listening TCP bridge on port 8443.",
+      );
     });
   }
 
   // Clear Terminal Button
-  const clearTermBtn = document.getElementById('btn-clear-terminal');
+  const clearTermBtn = document.getElementById("btn-clear-terminal");
   if (clearTermBtn) {
-    clearTermBtn.addEventListener('click', () => {
+    clearTermBtn.addEventListener("click", () => {
       logs = [];
-      saveToLocalStorage('bio_logs', []);
+      saveToLocalStorage("bio_logs", []);
       renderLogs();
     });
   }
 
   // Simulator Scan Trigger
-  const triggerScanBtn = document.getElementById('btn-trigger-sim-scan');
+  const triggerScanBtn = document.getElementById("btn-trigger-sim-scan");
   if (triggerScanBtn) {
-    triggerScanBtn.addEventListener('click', () => {
-      const select = document.getElementById('simulator-user-select') as HTMLSelectElement;
+    triggerScanBtn.addEventListener("click", () => {
+      const select = document.getElementById(
+        "simulator-user-select",
+      ) as HTMLSelectElement;
       if (!select) return;
 
       const rawVal = select.value;
       if (!rawVal) {
-        alert("Please enroll at least one employee fingerprint before triggering simulated scans!");
+        alert(
+          "Please enroll at least one employee fingerprint before triggering simulated scans!",
+        );
         return;
       }
 
       if (!isScannerUsbPlugged) {
-        playBeep('failure');
-        addLiveLog('scan_failed', "Hardware Error: Scanner scan aborted. Physical USB cable is unplugged.");
+        playBeep("failure");
+        addLiveLog(
+          "scan_failed",
+          "Hardware Error: Scanner scan aborted. Physical USB cable is unplugged.",
+        );
         return;
       }
 
       let userId = rawVal;
       let fingerName = "Right Index";
-      if (rawVal.includes(':')) {
-        const parts = rawVal.split(':');
+      if (rawVal.includes(":")) {
+        const parts = rawVal.split(":");
         userId = parts[0];
         fingerName = parts[1];
       }
@@ -1987,20 +2353,22 @@ function initApplication() {
   }
 
   // Toggle USB connection state
-  const usbToggleBtn = document.getElementById('toggle-usb-cable-btn');
-  const usbThumb = document.getElementById('usb-switch-thumb');
-  const pill = document.getElementById('hw-status-pill');
-  const pillDot = document.getElementById('hw-status-dot');
-  const pillText = document.getElementById('hw-status-text');
+  const usbToggleBtn = document.getElementById("toggle-usb-cable-btn");
+  const usbThumb = document.getElementById("usb-switch-thumb");
+  const pill = document.getElementById("hw-status-pill");
+  const pillDot = document.getElementById("hw-status-dot");
+  const pillText = document.getElementById("hw-status-text");
 
   if (usbToggleBtn && usbThumb && pill && pillDot && pillText) {
-    usbToggleBtn.addEventListener('click', () => {
+    usbToggleBtn.addEventListener("click", () => {
       isScannerUsbPlugged = !isScannerUsbPlugged;
 
       if (isScannerUsbPlugged) {
-        usbToggleBtn.className = "h-5 w-10 bg-emerald-500 rounded-full relative p-0.5 transition-all cursor-pointer";
-        usbThumb.className = "h-4 w-4 rounded-full bg-white block absolute right-0.5 transition-all";
-        
+        usbToggleBtn.className =
+          "h-5 w-10 bg-emerald-500 rounded-full relative p-0.5 transition-all cursor-pointer";
+        usbThumb.className =
+          "h-4 w-4 rounded-full bg-white block absolute right-0.5 transition-all";
+
         pillDot.className = "relative flex h-2 w-2";
         pillDot.innerHTML = `
           <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
@@ -2008,67 +2376,98 @@ function initApplication() {
         `;
         pillText.textContent = "Ready (USB)";
         pillText.className = "text-emerald-400";
-        
-        addLiveLog('device_connected', "Biometric scanner connected & ready on USB port.");
+
+        addLiveLog(
+          "device_connected",
+          "Biometric scanner connected & ready on USB port.",
+        );
       } else {
-        usbToggleBtn.className = "h-5 w-10 bg-slate-800 rounded-full relative p-0.5 transition-all cursor-pointer";
-        usbThumb.className = "h-4 w-4 rounded-full bg-slate-400 block absolute left-0.5 transition-all";
-        
+        usbToggleBtn.className =
+          "h-5 w-10 bg-slate-800 rounded-full relative p-0.5 transition-all cursor-pointer";
+        usbThumb.className =
+          "h-4 w-4 rounded-full bg-slate-400 block absolute left-0.5 transition-all";
+
         pillDot.className = "relative flex h-2 w-2";
         pillDot.innerHTML = `
           <span class="relative inline-flex rounded-full h-2 w-2 bg-rose-500"></span>
         `;
         pillText.textContent = "Unplugged";
         pillText.className = "text-rose-400 font-bold animate-pulse";
-        
-        addLiveLog('scan_failed', "CRITICAL: Biometric scanner USB cable has been unplugged or disconnected!");
+
+        addLiveLog(
+          "scan_failed",
+          "CRITICAL: Biometric scanner USB cable has been unplugged or disconnected!",
+        );
       }
     });
   }
 
   // Copy Fingerprint Visitor ID
-  const copyBtn = document.getElementById('fp-copy-btn');
+  const copyBtn = document.getElementById("fp-copy-btn");
   if (copyBtn) {
-    copyBtn.addEventListener('click', () => {
+    copyBtn.addEventListener("click", () => {
       if (fpData?.visitor_id) {
         navigator.clipboard.writeText(fpData.visitor_id);
         const originalText = copyBtn.textContent;
-        copyBtn.textContent = '✓ Copied!';
-        copyBtn.classList.remove('bg-slate-850', 'text-slate-200');
-        copyBtn.classList.add('bg-emerald-950/40', 'border-emerald-500/20', 'text-emerald-400');
+        copyBtn.textContent = "✓ Copied!";
+        copyBtn.classList.remove("bg-slate-850", "text-slate-200");
+        copyBtn.classList.add(
+          "bg-emerald-950/40",
+          "border-emerald-500/20",
+          "text-emerald-400",
+        );
         setTimeout(() => {
           copyBtn.textContent = originalText;
-          copyBtn.classList.add('bg-slate-850', 'text-slate-200');
-          copyBtn.classList.remove('bg-emerald-950/40', 'border-emerald-500/20', 'text-emerald-400');
+          copyBtn.classList.add("bg-slate-850", "text-slate-200");
+          copyBtn.classList.remove(
+            "bg-emerald-950/40",
+            "border-emerald-500/20",
+            "text-emerald-400",
+          );
         }, 2000);
       }
     });
   }
 
   // Physical USB Scan Button
-  const triggerPhysicalScanBtn = document.getElementById('btn-trigger-physical-scan');
+  const triggerPhysicalScanBtn = document.getElementById(
+    "btn-trigger-physical-scan",
+  );
   if (triggerPhysicalScanBtn) {
-    triggerPhysicalScanBtn.addEventListener('click', handlePhysicalScan);
+    triggerPhysicalScanBtn.addEventListener("click", handlePhysicalScan);
   }
 
   // Run Hardware Diagnostics Button
-  const diagnosticBtn = document.getElementById('btn-run-diagnostics');
+  const diagnosticBtn = document.getElementById("btn-run-diagnostics");
   if (diagnosticBtn) {
-    diagnosticBtn.addEventListener('click', async () => {
-      addLiveLog('device_connected', "Starting hardware sweep diagnostic routine on client machine...");
+    diagnosticBtn.addEventListener("click", async () => {
+      addLiveLog(
+        "device_connected",
+        "Starting hardware sweep diagnostic routine on client machine...",
+      );
       diagnosticBtn.textContent = "Running diagnostics...";
-      diagnosticBtn.setAttribute('disabled', 'true');
+      diagnosticBtn.setAttribute("disabled", "true");
 
       try {
         const result = await capturePhysicalFingerprint(1500);
-        addLiveLog('device_connected', "Diagnostic Sweep COMPLETE: USB Biometric Device SECUGEN HU20 is active, calibrated, and online on port 8443 / 8000!");
-        alert("Diagnostics Complete:\nSecuGen HU20 device is plugged in and responding correctly!");
+        addLiveLog(
+          "device_connected",
+          "Diagnostic Sweep COMPLETE: USB Biometric Device SECUGEN HU20 is active, calibrated, and online on port 8443 / 8000!",
+        );
+        alert(
+          "Diagnostics Complete:\nSecuGen HU20 device is plugged in and responding correctly!",
+        );
       } catch (err: any) {
-        addLiveLog('scan_failed', `Diagnostic Sweep FAILED: SecuGen WebAPI unreachable. Details: ${err.message || String(err)}`);
-        alert("Diagnostics Failed:\nCould not contact SecuGen WebAPI daemon on localhost. Ensure your background service is running on Port 8443 or Port 8000.");
+        addLiveLog(
+          "scan_failed",
+          `Diagnostic Sweep FAILED: SecuGen WebAPI unreachable. Details: ${err.message || String(err)}`,
+        );
+        alert(
+          "Diagnostics Failed:\nCould not contact SecuGen WebAPI daemon on localhost. Ensure your background service is running on Port 8443 or Port 8000.",
+        );
       } finally {
         diagnosticBtn.textContent = "Run Diagnostic Sweep";
-        diagnosticBtn.removeAttribute('disabled');
+        diagnosticBtn.removeAttribute("disabled");
         lucide.createIcons();
       }
     });
@@ -2077,19 +2476,21 @@ function initApplication() {
   // Switch to Simulator Mode helper
   window.switchToSimulatorMode = () => {
     isScannerUsbPlugged = true;
-    driverMode = 'bridge';
-    
+    driverMode = "bridge";
+
     // Synchronize USB toggle switch element
-    const usbToggleBtn = document.getElementById('toggle-usb-cable-btn');
-    const usbThumb = document.getElementById('usb-switch-thumb');
-    const pill = document.getElementById('hw-status-pill');
-    const pillDot = document.getElementById('hw-status-dot');
-    const pillText = document.getElementById('hw-status-text');
+    const usbToggleBtn = document.getElementById("toggle-usb-cable-btn");
+    const usbThumb = document.getElementById("usb-switch-thumb");
+    const pill = document.getElementById("hw-status-pill");
+    const pillDot = document.getElementById("hw-status-dot");
+    const pillText = document.getElementById("hw-status-text");
 
     if (usbToggleBtn && usbThumb && pill && pillDot && pillText) {
-      usbToggleBtn.className = "h-5 w-10 bg-emerald-500 rounded-full relative p-0.5 transition-all cursor-pointer";
-      usbThumb.className = "h-4 w-4 rounded-full bg-white block absolute right-0.5 transition-all";
-      
+      usbToggleBtn.className =
+        "h-5 w-10 bg-emerald-500 rounded-full relative p-0.5 transition-all cursor-pointer";
+      usbThumb.className =
+        "h-4 w-4 rounded-full bg-white block absolute right-0.5 transition-all";
+
       pillDot.className = "relative flex h-2 w-2";
       pillDot.innerHTML = `
         <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
@@ -2100,28 +2501,35 @@ function initApplication() {
     }
 
     // Set active driver buttons styling
-    const secugenDriverBtn = document.getElementById('driver-secugen-btn');
-    const bridgeDriverBtn = document.getElementById('driver-bridge-btn');
+    const secugenDriverBtn = document.getElementById("driver-secugen-btn");
+    const bridgeDriverBtn = document.getElementById("driver-bridge-btn");
     if (secugenDriverBtn && bridgeDriverBtn) {
-      bridgeDriverBtn.className = "py-2 px-3 border border-cyan-500/30 text-cyan-400 bg-cyan-950/20 text-xs font-bold rounded-xl cursor-pointer hover:border-cyan-400 transition-all text-center";
-      secugenDriverBtn.className = "py-2 px-3 border border-slate-800 text-slate-400 bg-slate-900/40 text-xs font-bold rounded-xl cursor-pointer hover:border-slate-700 hover:text-slate-200 transition-all text-center";
+      bridgeDriverBtn.className =
+        "py-2 px-3 border border-cyan-500/30 text-cyan-400 bg-cyan-950/20 text-xs font-bold rounded-xl cursor-pointer hover:border-cyan-400 transition-all text-center";
+      secugenDriverBtn.className =
+        "py-2 px-3 border border-slate-800 text-slate-400 bg-slate-900/40 text-xs font-bold rounded-xl cursor-pointer hover:border-slate-700 hover:text-slate-200 transition-all text-center";
     }
 
-    addLiveLog('device_connected', "সফ্টওয়্যার সিমুলেটর সক্রিয় করা হয়েছে। ইউএসবি কানেক্টেড!");
-    
+    addLiveLog(
+      "device_connected",
+      "সফ্টওয়্যার সিমুলেটর সক্রিয় করা হয়েছে। ইউএসবি কানেক্টেড!",
+    );
+
     // Switch to the hardware interface tab
-    switchTab('console');
-    
+    switchTab("console");
+
     // Flash alert
-    alert("সফটওয়্যার সিমুলেটর সফলভাবে চালু হয়েছে!\nএখন আপনি যেকোনো কর্মচারী নির্বাচন করে 'Simulate Scanner Scan' বাটনে ক্লিক করলেই উপস্থিতি রেকর্ড করা হবে।");
+    alert(
+      "সফটওয়্যার সিমুলেটর সফলভাবে চালু হয়েছে!\nএখন আপনি যেকোনো কর্মচারী নির্বাচন করে 'Simulate Scanner Scan' বাটনে ক্লিক করলেই উপস্থিতি রেকর্ড করা হবে।",
+    );
   };
 
   // Initialize view displays
   lucide.createIcons();
 }
 
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', initApplication);
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", initApplication);
 } else {
   initApplication();
 }

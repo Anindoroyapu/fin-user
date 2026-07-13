@@ -187,7 +187,9 @@ async function initDb() {
     console.log("✅ MySQL: Table 'fin_fingerprints' verified successfully.");
 
     // Gracefully execute alter statements for existing tables to avoid missing column errors
-    await db.query(`ALTER TABLE fin_fingerprints ADD COLUMN BMPBase64 MEDIUMTEXT NULL`).catch(() => {});
+    await db.query(`ALTER TABLE fin_fingerprints MODIFY COLUMN BMPBase64 MEDIUMTEXT NULL`).catch(err => {
+      console.log("ℹ️ Could not modify BMPBase64 column:", err.message);
+    });
     await db.query(`ALTER TABLE fin_fingerprints ADD COLUMN ErrorCode INT NULL`).catch(() => {});
     await db.query(`ALTER TABLE fin_fingerprints ADD COLUMN ISOTemplateBase64 VARCHAR(3000) NULL`).catch(() => {});
     await db.query(`ALTER TABLE fin_fingerprints ADD COLUMN ImageDPI INT NULL`).catch(() => {});
